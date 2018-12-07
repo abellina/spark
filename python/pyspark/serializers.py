@@ -747,10 +747,11 @@ def read_int(stream):
         raise EOFError
     return struct.unpack("!i", length)[0]
 
-
 def write_int(value, stream):
     stream.write(struct.pack("!i", value))
 
+def write_double(value, stream):
+    stream.write(struct.pack("!d", value))
 
 def read_bool(stream):
     length = stream.read(1)
