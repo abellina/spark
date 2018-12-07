@@ -186,8 +186,8 @@ class SparkContext(object):
         auth_token = self._gateway.gateway_parameters.auth_token
         self._accumulatorServer = accumulators._start_update_server(auth_token)
         (host, port) = self._accumulatorServer.server_address
-        self._javaAccumulator = self._jvm.PythonAccumulatorV2(host, port, auth_token)
-        self._jsc.sc().register(self._javaAccumulator)
+        # self._javaAccumulator = self._jvm.PythonAccumulatorV2(host, port, auth_token)
+        # self._jsc.sc().register(self._javaAccumulator)
 
         # If encryption is enabled, we need to setup a server in the jvm to read broadcast
         # data via a socket.
@@ -849,7 +849,7 @@ class SparkContext(object):
         """
         return Broadcast(self, value, self._pickled_broadcast_vars)
 
-    def accumulator(self, value, accum_param=None):
+    def accumulator(self, value, name=None, accum_param=None):
         """
         Create an L{Accumulator} with the given initial value, using a given
         L{AccumulatorParam} helper object to define how to add values of the
@@ -867,7 +867,10 @@ class SparkContext(object):
             else:
                 raise TypeError("No default accumulator param for type %s" % type(value))
         SparkContext._next_accum_id += 1
-        return Accumulator(SparkContext._next_accum_id - 1, value, accum_param)
+        acc = Accumulator(self, SparkContext._next_accum_id - 1, value, accum_param)
+        acc.register(self._jsc.sc(), name)
+
+        return acc
 
     def addFile(self, path, recursive=False):
         """
