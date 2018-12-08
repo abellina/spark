@@ -165,13 +165,20 @@ class Accumulator(object):
         self._deserialized = False
 
     def register(self, sc, name):
+        accum_type = AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR # default
+        # whether or not to attach a py4j callback listener to the 
+        # jvm accumulator (only custom python accumulators, without jvm
+        # counterparts)
+        set_listener = True
+        # if the param has a type defined, use that
         if hasattr(self.accum_param, "accum_type"):
-            self._jac = getattr(sc._jvm, 
-                    JVMAccumulatorType.get_jvm_type(
-                        self.accum_param.accum_type))()
-        else:
-            # PythonAccumulatorV2 uses the py4j Callback Server
-            self._jac = sc._jvm.org.apache.spark.api.python.PythonAccumulatorV2()
+            accum_type = self.accum_param.accum_type
+            set_listener = False
+
+        self._jac = getattr(sc._jvm, AccumulatorType.get_jvm_type(accum_type))()
+
+        if set_listener:
+            # Custom accumulators use the py4j Callback Server
             listener = PythonAccumulatorListener(sc._jvm)
             self._jac.setListener(listener)
 
@@ -264,12 +271,14 @@ class AddingAccumulatorParam(AccumulatorParam):
         value1 += value2
         return value1
 
-class JVMAccumulatorType(object):
+class AccumulatorType(object):
+    CUSTOM_PYTHON_ACCUMULATOR = -1
     LONG_ACCUMULATOR = 0
     DOUBLE_ACCUMULATOR = 1
     COMPLEX_ACCUMULATOR = 2
     
     python_to_jvm_map = {
+        CUSTOM_PYTHON_ACCUMULATOR: "org.apache.spark.api.python.PythonAccumulatorV2",
         LONG_ACCUMULATOR: "org.apache.spark.util.LongAccumulator",
         DOUBLE_ACCUMULATOR: "org.apache.spark.util.DoubleAccumulator",
         COMPLEX_ACCUMULATOR: "org.apache.spark.util.ComplexAccumulator" 
@@ -284,9 +293,9 @@ class JVMAccumulatorType(object):
         return python_to_jvm_type[python_type]
 
 # Singleton accumulator params for some standard types
-INT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0, JVMAccumulatorType.LONG_ACCUMULATOR)
-FLOAT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0, JVMAccumulatorType.DOUBLE_ACCUMULATOR)
-COMPLEX_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0j, JVMAccumulatorType.COMPLEX_ACCUMULATOR)
+INT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0, AccumulatorType.LONG_ACCUMULATOR)
+FLOAT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0, AccumulatorType.DOUBLE_ACCUMULATOR)
+COMPLEX_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0j, AccumulatorType.COMPLEX_ACCUMULATOR)
 
 if __name__ == "__main__":
     import doctest
