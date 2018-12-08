@@ -31,14 +31,14 @@ except ImportError:
 import socket
 import traceback
 
-from pyspark.accumulators import _accumulatorRegistry
+from pyspark.accumulators import _accumulatorRegistry, AccumulatorType
 from pyspark.broadcast import Broadcast, _broadcastRegistry
 from pyspark.java_gateway import local_connect_and_auth
 from pyspark.taskcontext import BarrierTaskContext, TaskContext
 from pyspark.files import SparkFiles
 from pyspark.rdd import PythonEvalType
 from pyspark.serializers import write_with_length, write_int, read_long, read_bool, \
-    write_long, read_int, SpecialLengths, UTF8Deserializer, PickleSerializer, \
+    write_long, write_double, read_int, SpecialLengths, UTF8Deserializer, PickleSerializer, \
     BatchedSerializer, ArrowStreamPandasSerializer
 from pyspark.sql.types import to_arrow_type
 from pyspark.util import _get_argspec, fail_on_stopiteration
@@ -396,7 +396,24 @@ def main(infile, outfile):
     write_int(SpecialLengths.END_OF_DATA_SECTION, outfile)
     write_int(len(_accumulatorRegistry), outfile)
     for (aid, accum) in _accumulatorRegistry.items():
-        pickleSer._write_with_length((aid, accum._value), outfile)
+        try:
+            write_long(aid, outfile)
+            if (getattr(accum.accum_param, "accum_type")):
+                write_int(accum.accum_param.accum_type, outfile)
+                if (accum.accum_param.accum_type == AccumulatorType.LONG_ACCUMULATOR):
+                    write_long(int(accum._value), outfile)
+                elif (accum.accum_param.accum_type == AccumulatorType.DOUBLE_ACCUMULATOR):
+                    write_double(float(accum._value), outfile)
+                elif (accum.accum_param.accum_type == AccumulatorType.COMPLEX_ACCUMULATOR):
+                    write_double(float(accum._value.real), outfile)
+                    write_double(float(accum._value.imag), outfile)
+            else:
+                write_int(AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR, outfile) # c
+                print("sending accum value: " + str(accum._value))
+                pickleSer._write_with_length((aid, accum._value), outfile)
+        except Exception:
+            print("Error sending accumulator update: ", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
 
     # check end of stream
     if read_int(infile) == SpecialLengths.END_OF_STREAM:
