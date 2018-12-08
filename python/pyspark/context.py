@@ -867,8 +867,9 @@ class SparkContext(object):
             else:
                 raise TypeError("No default accumulator param for type %s" % type(value))
         SparkContext._next_accum_id += 1
-        acc = Accumulator(self, SparkContext._next_accum_id - 1, value, accum_param)
-        acc.register(self._jsc.sc(), name)
+        acc = Accumulator(SparkContext._next_accum_id - 1, value, accum_param)
+        acc.accum_param = accum_param
+        acc.register(self, name)
 
         return acc
 
