@@ -79,8 +79,7 @@ private[spark] case class PythonFunction(
     pythonIncludes: JList[String],
     pythonExec: String,
     pythonVer: String,
-    broadcastVars: JList[Broadcast[PythonBroadcast]],
-    accumulator: PythonAccumulatorV2)
+    broadcastVars: JList[Broadcast[PythonBroadcast]])
 
 /**
  * A wrapper for chained Python functions (from bottom to top).
@@ -596,6 +595,10 @@ class BytesToString extends org.apache.spark.api.java.function.Function[Array[By
  * Internal class that acts as an `AccumulatorV2` for Python accumulators. Inside, it
  * collects a list of pickled strings that we pass to Python through a socket.
  */
+trait PythonAccumulatorListener {
+    def merge(data: JList[Array[Byte]])
+}
+
 private[spark] class PythonAccumulatorV2(
     @transient private val serverHost: String,
     private val serverPort: Int,
@@ -610,7 +613,7 @@ private[spark] class PythonAccumulatorV2(
    * We try to reuse a single Socket to transfer accumulator updates, as they are all added
    * by the DAGScheduler's single-threaded RpcEndpoint anyway.
    */
-  @transient private var socket: Socket = _
+  @transient private var listener: PythonAccumulatorListener = _
 
   private def openSocket(): Socket = synchronized {
     if (socket == null || socket.isClosed) {
@@ -620,6 +623,10 @@ private[spark] class PythonAccumulatorV2(
       socket.getOutputStream.write(secretToken.getBytes(StandardCharsets.UTF_8))
     }
     socket
+  }
+
+  def setListener(listener: PythonAccumulatorListener): Unit = {
+      this.listener = listener
   }
 
   // Need to override so the types match with PythonFunction
@@ -635,22 +642,8 @@ private[spark] class PythonAccumulatorV2(
       // We are on the worker
       super.merge(otherPythonAccumulator)
     } else {
-      // This happens on the master, where we pass the updates to Python through a socket
-      val socket = openSocket()
-      val in = socket.getInputStream
-      val out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream, bufferSize))
-      val values = other.value
-      out.writeInt(values.size)
-      for (array <- values.asScala) {
-        out.writeInt(array.length)
-        out.write(array)
-      }
-      out.flush()
-      // Wait for a byte from the Python side as an acknowledgement
-      val byteRead = in.read()
-      if (byteRead == -1) {
-        throw new SparkException("EOF reached before Python server acknowledged")
-      }
+      logInfo(s"Sending accumulator updates to python: ${other.value}")
+      this.listener.merge(other.value)
     }
   }
 }
