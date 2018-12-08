@@ -106,7 +106,6 @@ pickleSer = PickleSerializer()
 # the local accumulator updates back to the driver program at the end of a task.
 _accumulatorRegistry = {}
 
-
 def _deserialize_accumulator(aid, zero_value, accum_param):
     from pyspark.accumulators import _accumulatorRegistry
     # If this certain accumulator was deserialized, don't overwrite it.
@@ -118,6 +117,31 @@ def _deserialize_accumulator(aid, zero_value, accum_param):
         _accumulatorRegistry[aid] = accum
         return accum
 
+class AccumulatorMetadata(object):
+    def __init__(self, metadata):
+        self.id = metadata.id()
+        self.name = metadata.name().toString()
+        self.countFailedValues = metadata.countFailedValues()
+
+    def getJavaMetadata(self):
+        return sc._jvm.org.apache.spark.util.AccumulatorMetadata(
+            self.id,
+            self.name,
+            self.countFailedValues)
+
+class PythonAccumulatorListener(object):
+    def __init__(self, gateway):
+        self.gateway = gateway
+    def merge(self, obj):
+        print("Got something from java")
+        for o in obj:
+            deser = pickleSer.loads(o)
+            print ("update for accum " + str(deser))
+            aid = deser[0]
+            update = deser[1] 
+            _accumulatorRegistry[aid] += update
+    class Java:
+        implements = ["org.apache.spark.api.python.PythonAccumulatorListener"]
 
 class Accumulator(object):
 
@@ -139,7 +163,26 @@ class Accumulator(object):
         self.accum_param = accum_param
         self._value = value
         self._deserialized = False
-        _accumulatorRegistry[aid] = self
+
+    def register(self, sc, name):
+        if hasattr(self.accum_param, "accum_type"):
+            self._jac = getattr(sc._jvm, 
+                    JVMAccumulatorType.get_jvm_type(
+                        self.accum_param.accum_type))()
+        else:
+            # PythonAccumulatorV2 uses the py4j Callback Server
+            self._jac = sc._jvm.org.apache.spark.api.python.PythonAccumulatorV2()
+            listener = PythonAccumulatorListener(sc._jvm)
+            self._jac.setListener(listener)
+
+        # get the scala SparkContext 
+        ssc = sc._jsc.sc()
+        acc_name = name if name != None else "python-accumulator-" + str(self.aid)
+        ssc.register(self._jac, acc_name)
+        self.aid = self._jac.id() # the accumulator will get a scala-side accumulator id
+        _accumulatorRegistry[self.aid] = self
+         # after this call, _jac has metadata populated
+        self.accum_param.meta = AccumulatorMetadata(self._jac.metadata())
 
     def __reduce__(self):
         """Custom serialization; saves the zero value from our AccumulatorParam"""
@@ -151,7 +194,12 @@ class Accumulator(object):
         """Get the accumulator's value; only usable in driver program"""
         if self._deserialized:
             raise Exception("Accumulator.value cannot be accessed inside tasks")
-        return self._value
+        # we get it from the JVM side
+        val = self._jac.value()
+        if (self.accum_param.accum_type == 2): # complex
+            return complex(val.re(), val.im())
+        else:
+            return val
 
     @value.setter
     def value(self, value):
@@ -205,8 +253,9 @@ class AddingAccumulatorParam(AccumulatorParam):
     as a parameter.
     """
 
-    def __init__(self, zero_value):
+    def __init__(self, zero_value, accum_type):
         self.zero_value = zero_value
+        self.accum_type = accum_type
 
     def zero(self, value):
         return self.zero_value
@@ -215,84 +264,29 @@ class AddingAccumulatorParam(AccumulatorParam):
         value1 += value2
         return value1
 
+class JVMAccumulatorType(object):
+    LONG_ACCUMULATOR = 0
+    DOUBLE_ACCUMULATOR = 1
+    COMPLEX_ACCUMULATOR = 2
+    
+    python_to_jvm_map = {
+        LONG_ACCUMULATOR: "org.apache.spark.util.LongAccumulator",
+        DOUBLE_ACCUMULATOR: "org.apache.spark.util.DoubleAccumulator",
+        COMPLEX_ACCUMULATOR: "org.apache.spark.util.ComplexAccumulator" 
+    }
+
+    @staticmethod
+    def get_jvm_type(python_type):
+        if python_type not in python_to_jvm_type:
+            raise Exception(
+                "Accumulator type {} doesn't have a JVM type registered."
+                .format(python_type))
+        return python_to_jvm_type[python_type]
 
 # Singleton accumulator params for some standard types
-INT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0)
-FLOAT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0)
-COMPLEX_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0j)
-
-
-class _UpdateRequestHandler(SocketServer.StreamRequestHandler):
-
-    """
-    This handler will keep polling updates from the same socket until the
-    server is shutdown.
-    """
-
-    def handle(self):
-        from pyspark.accumulators import _accumulatorRegistry
-        auth_token = self.server.auth_token
-
-        def poll(func):
-            while not self.server.server_shutdown:
-                # Poll every 1 second for new data -- don't block in case of shutdown.
-                r, _, _ = select.select([self.rfile], [], [], 1)
-                if self.rfile in r:
-                    if func():
-                        break
-
-        def accum_updates():
-            num_updates = read_int(self.rfile)
-            for _ in range(num_updates):
-                (aid, update) = pickleSer._read_with_length(self.rfile)
-                _accumulatorRegistry[aid] += update
-            # Write a byte in acknowledgement
-            self.wfile.write(struct.pack("!b", 1))
-            return False
-
-        def authenticate_and_accum_updates():
-            received_token = self.rfile.read(len(auth_token))
-            if isinstance(received_token, bytes):
-                received_token = received_token.decode("utf-8")
-            if (received_token == auth_token):
-                accum_updates()
-                # we've authenticated, we can break out of the first loop now
-                return True
-            else:
-                raise Exception(
-                    "The value of the provided token to the AccumulatorServer is not correct.")
-
-        # first we keep polling till we've received the authentication token
-        poll(authenticate_and_accum_updates)
-        # now we've authenticated, don't need to check for the token anymore
-        poll(accum_updates)
-
-
-class AccumulatorServer(SocketServer.TCPServer):
-
-    def __init__(self, server_address, RequestHandlerClass, auth_token):
-        SocketServer.TCPServer.__init__(self, server_address, RequestHandlerClass)
-        self.auth_token = auth_token
-
-    """
-    A simple TCP server that intercepts shutdown() in order to interrupt
-    our continuous polling on the handler.
-    """
-    server_shutdown = False
-
-    def shutdown(self):
-        self.server_shutdown = True
-        SocketServer.TCPServer.shutdown(self)
-        self.server_close()
-
-
-def _start_update_server(auth_token):
-    """Start a TCP server to receive accumulator updates in a daemon thread, and returns it"""
-    server = AccumulatorServer(("localhost", 0), _UpdateRequestHandler, auth_token)
-    thread = threading.Thread(target=server.serve_forever)
-    thread.daemon = True
-    thread.start()
-    return server
+INT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0, JVMAccumulatorType.LONG_ACCUMULATOR)
+FLOAT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0, JVMAccumulatorType.DOUBLE_ACCUMULATOR)
+COMPLEX_ACCUMULATOR_PARAM = AddingAccumulatorParam(0.0j, JVMAccumulatorType.COMPLEX_ACCUMULATOR)
 
 if __name__ == "__main__":
     import doctest
