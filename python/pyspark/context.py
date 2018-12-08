@@ -181,14 +181,6 @@ class SparkContext(object):
         # Reset the SparkConf to the one actually used by the SparkContext in JVM.
         self._conf = SparkConf(_jconf=self._jsc.sc().conf())
 
-        # Create a single Accumulator in Java that we'll send all our updates through;
-        # they will be passed back to us through a TCP server
-        auth_token = self._gateway.gateway_parameters.auth_token
-        self._accumulatorServer = accumulators._start_update_server(auth_token)
-        (host, port) = self._accumulatorServer.server_address
-        # self._javaAccumulator = self._jvm.PythonAccumulatorV2(host, port, auth_token)
-        # self._jsc.sc().register(self._javaAccumulator)
-
         # If encryption is enabled, we need to setup a server in the jvm to read broadcast
         # data via a socket.
         # scala's mangled names w/ $ in them require special treatment.
@@ -430,9 +422,6 @@ class SparkContext(object):
                 pass
             finally:
                 self._jsc = None
-        if getattr(self, "_accumulatorServer", None):
-            self._accumulatorServer.shutdown()
-            self._accumulatorServer = None
         with SparkContext._lock:
             SparkContext._active_spark_context = None
 
