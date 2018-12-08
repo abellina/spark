@@ -31,7 +31,7 @@ from subprocess import Popen, PIPE
 if sys.version >= '3':
     xrange = range
 
-from py4j.java_gateway import java_import, JavaGateway, JavaObject, GatewayParameters
+from py4j.java_gateway import java_import, JavaGateway, JavaObject, GatewayParameters, CallbackServerParameters
 from pyspark.find_spark_home import _find_spark_home
 from pyspark.serializers import read_int, write_with_length, UTF8Deserializer
 from pyspark.util import _exception_message
@@ -117,8 +117,15 @@ def launch_gateway(conf=None):
 
     # Connect to the gateway
     gateway = JavaGateway(
+        callback_server_parameters=CallbackServerParameters(port=0, auth_token=gateway_secret),
         gateway_parameters=GatewayParameters(port=gateway_port, auth_token=gateway_secret,
                                              auto_convert=True))
+
+    callback_port = gateway.get_callback_server().get_listening_port()
+
+    gateway.java_gateway_server.resetCallbackClient(
+        gateway.java_gateway_server.getCallbackClient().getAddress(),
+        callback_port)
 
     # Import the classes used by PySpark
     java_import(gateway.jvm, "org.apache.spark.SparkConf")
