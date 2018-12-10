@@ -201,9 +201,12 @@ class Accumulator(object):
         """Get the accumulator's value; only usable in driver program"""
         if self._deserialized:
             raise Exception("Accumulator.value cannot be accessed inside tasks")
-        # we get it from the JVM side
-        val = self._jac.value()
-        if (self.accum_param.accum_type == 2): # complex
+        # we get it from the JVM side, if this is not a custom python accumulator
+        if (self.accum_param.accum_type == AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR):
+            val = self._value
+        else:
+            val = self._jac.value()
+        if (self.accum_param.accum_type == AccumulatorType.COMPLEX_ACCUMULATOR):
             return complex(val.re(), val.im())
         else:
             return val
@@ -228,7 +231,7 @@ class Accumulator(object):
         return str(self._value)
 
     def __repr__(self):
-        return "Accumulator<id=%i, value=%s>" % (self.aid, self._value)
+        return "Accumulator<id=%i, value=%s>" % (self.aid, self.value())
 
 
 class AccumulatorParam(object):
@@ -286,11 +289,11 @@ class AccumulatorType(object):
 
     @staticmethod
     def get_jvm_type(python_type):
-        if python_type not in python_to_jvm_type:
+        if python_type not in AccumulatorType.python_to_jvm_map:
             raise Exception(
                 "Accumulator type {} doesn't have a JVM type registered."
                 .format(python_type))
-        return python_to_jvm_type[python_type]
+        return AccumulatorType.python_to_jvm_map[python_type]
 
 # Singleton accumulator params for some standard types
 INT_ACCUMULATOR_PARAM = AddingAccumulatorParam(0, AccumulatorType.LONG_ACCUMULATOR)

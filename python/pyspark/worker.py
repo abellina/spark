@@ -398,17 +398,20 @@ def main(infile, outfile):
     for (aid, accum) in _accumulatorRegistry.items():
         try:
             write_long(aid, outfile)
+            accum_type = -1
             if (getattr(accum.accum_param, "accum_type")):
-                write_int(accum.accum_param.accum_type, outfile)
-                if (accum.accum_param.accum_type == AccumulatorType.LONG_ACCUMULATOR):
-                    write_long(int(accum._value), outfile)
-                elif (accum.accum_param.accum_type == AccumulatorType.DOUBLE_ACCUMULATOR):
-                    write_double(float(accum._value), outfile)
-                elif (accum.accum_param.accum_type == AccumulatorType.COMPLEX_ACCUMULATOR):
-                    write_double(float(accum._value.real), outfile)
-                    write_double(float(accum._value.imag), outfile)
+                accum_type = accum_type
+
+            write_int(accum_type, outfile)
+
+            if (accum_type == AccumulatorType.LONG_ACCUMULATOR):
+                write_long(int(accum._value), outfile)
+            elif (accum_type == AccumulatorType.DOUBLE_ACCUMULATOR):
+                write_double(float(accum._value), outfile)
+            elif (accum_type == AccumulatorType.COMPLEX_ACCUMULATOR):
+                write_double(float(accum._value.real), outfile)
+                write_double(float(accum._value.imag), outfile)
             else:
-                write_int(AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR, outfile) # c
                 print("sending accum value: " + str(accum._value))
                 pickleSer._write_with_length((aid, accum._value), outfile)
         except Exception:
