@@ -611,7 +611,7 @@ private[spark] class PythonAccumulatorV2 extends CollectionAccumulator[Array[Byt
   override def merge(other: AccumulatorV2[Array[Byte], JList[Array[Byte]]]): Unit = synchronized {
     val otherPythonAccumulator = other.asInstanceOf[PythonAccumulatorV2]
     // This conditional isn't strictly speaking needed - merging only currently happens on the
-    // driver program - but that isn't gauranteed so incase this changes.
+    // driver program - but that isn't guaranteed so incase this changes.
     if (listener == null) {
       // We are on the worker
       super.merge(otherPythonAccumulator)

@@ -41,24 +41,8 @@ private[spark] case class AccumulatorMetadata(
  * (e.g., synchronized collections) because it will be read from other threads.
  */
 abstract class AccumulatorV2[IN, OUT] extends Serializable with Logging{
-  var metadata: AccumulatorMetadata = _
+  private[spark] var metadata: AccumulatorMetadata = _
   private[this] var atDriverSide = true
-
-  def setMetadata(accumulatorMetadata: AccumulatorMetadata): Unit = {
-    logInfo(s"Setting metadata to ${accumulatorMetadata}")
-    atDriverSide = false
-    metadata = accumulatorMetadata
-    // Automatically register the accumulator when it is deserialized with the task closure.
-    // This is for external accumulators and internal ones that do not represent task level
-    // metrics, e.g. internal SQL metrics, which are per-operator.
-    //val taskContext = TaskContext.get()
-    //logInfo(s"Task context is ${taskContext}")
-    //if (taskContext != null) {
-    //  logInfo(s"NOT Registering accumulator from setMetadata ${this}")
-    //  //TODO: abe fix 
-    //  //taskContext.registerAccumulator(this)
-    //}
-  }
 
   private[spark] def register(
       sc: SparkContext,
@@ -197,6 +181,13 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable with Logging{
     } else {
       this
     }
+  }
+
+  // Called from python side
+  def setMetadata(accumulatorMetadata: AccumulatorMetadata): Unit = {
+    logDebug(s"Setting metadata to ${accumulatorMetadata}")
+    atDriverSide = false // TODO: do we not mess with this and let readObject deal with it?
+    metadata = accumulatorMetadata
   }
 
   // Called by Java when deserializing an object
@@ -622,38 +613,5 @@ class CollectionAccumulator[T] extends AccumulatorV2[T, java.util.List[T]] {
   private[spark] def setValue(newValue: java.util.List[T]): Unit = {
     _list.clear()
     _list.addAll(newValue)
-  }
-}
-
-class LegacyAccumulatorWrapper[R, T](
-    initialValue: R,
-    param: org.apache.spark.AccumulableParam[R, T]) extends AccumulatorV2[T, R] {
-  private[spark] var _value = initialValue  // Current value on driver
-
-  @transient private lazy val _zero = param.zero(initialValue)
-
-  override def isZero: Boolean = _value.asInstanceOf[AnyRef].eq(_zero.asInstanceOf[AnyRef])
-  override def copy(): LegacyAccumulatorWrapper[R, T] = {
-    val acc = new LegacyAccumulatorWrapper(initialValue, param)
-    acc._value = _value
-    acc
-  }
-
-  override def reset(): Unit = {
-    _value = param.zero(initialValue)
-  }
-
-  override def add(v: T): Unit = _value = param.addAccumulator(_value, v)
-
-  override def merge(other: AccumulatorV2[T, R]): Unit = other match {
-    case o: LegacyAccumulatorWrapper[R, T] => _value = param.addInPlace(_value, o.value)
-    case _ => throw new UnsupportedOperationException(
-      s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
-  }
-
-  override def value: R = _value
-
-  private[spark] def setValue(newValue: R): Unit = {
-      _value = newValue
   }
 }
