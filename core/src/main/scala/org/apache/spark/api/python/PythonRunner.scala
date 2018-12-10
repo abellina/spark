@@ -453,6 +453,13 @@ private[spark] abstract class BasePythonRunner[IN, OUT](
         writerThread.exception.getOrElse(null))
     }
 
+    object PythonAccumulatorType extends Enumeration {
+      val LONG_ACCUMULATOR = Value(1)
+      val DOUBLE_ACCUMULATOR = Value(2)
+      val COMPLEX_ACCUMULATOR = Value(3)
+      val CUSTOM_PYTHON_ACCUMULATOR = Value(-1)
+    }
+
     protected def handleEndOfDataSection(): Unit = {
       val numAccumulatorUpdates = stream.readInt()
       logInfo("INDIVIDUAL ACUMMULATORS " + numAccumulatorUpdates)
@@ -461,28 +468,35 @@ private[spark] abstract class BasePythonRunner[IN, OUT](
         val aid = stream.readLong()
         val accumType = stream.readInt()
         logInfo("Accumulator " + aid + " type " + accumType)
-        val lac: AccumulatorV2[_, _] = if (accumType == 0) { 
-            val acc = new LongAccumulator() 
+        val lac: AccumulatorV2[_, _] = PythonAccumulatorType(accumType) match {
+          case PythonAccumulatorType.LONG_ACCUMULATOR => {
+            val acc = new LongAccumulator()
             acc.setValue(stream.readLong())
             acc
-        } else if (accumType == 1) { 
-            val acc = new DoubleAccumulator() 
+          }
+          case PythonAccumulatorType.DOUBLE_ACCUMULATOR => {
+            val acc = new DoubleAccumulator()
             acc.setValue(stream.readDouble())
             acc
-        } else if (accumType == 2) {
+          }
+          case PythonAccumulatorType.COMPLEX_ACCUMULATOR => {
             val acc = new ComplexDoubleAccumulator()
             acc.setValue(new DoubleComplex(stream.readDouble(), stream.readDouble()))
             acc
-        } else {
-            logInfo ("Wow a custom one!!")
+          }
+          case _ => {
+            // CUSTOM_PYTHON_ACCUMULATOR
+            logInfo("Wow a custom one!!")
             val acc = new PythonAccumulatorV2()
             val updateLen = stream.readInt()
-            logInfo ("Update Length " + updateLen)
+            logInfo("Update Length " + updateLen)
             val update = new Array[Byte](updateLen)
             stream.readFully(update)
             acc.add(update)
             acc
+          }
         }
+
         lac.setMetadata(new AccumulatorMetadata(aid, None, false))
         context.registerAccumulator(lac)
         logInfo(s"Got accumulator update ${aid}")
