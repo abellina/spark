@@ -83,7 +83,7 @@ private[spark] abstract class BasePythonRunner[IN, OUT](
   protected val pythonVer = funcs.head.funcs.head.pythonVer
 
   // TODO: support accumulator in multiple UDF
-  protected val accumulator = funcs.head.funcs.head.accumulator
+  // protected val accumulator = funcs.head.funcs.head.accumulator
 
   // Expose a ServerSocket to support method calls via socket from Python side.
   private[spark] var serverSocket: Option[ServerSocket] = None
@@ -454,14 +454,38 @@ private[spark] abstract class BasePythonRunner[IN, OUT](
     }
 
     protected def handleEndOfDataSection(): Unit = {
-      // We've finished the data section of the output, but we can still
-      // read some accumulator updates:
       val numAccumulatorUpdates = stream.readInt()
+      logInfo("INDIVIDUAL ACUMMULATORS " + numAccumulatorUpdates)
       (1 to numAccumulatorUpdates).foreach { _ =>
-        val updateLen = stream.readInt()
-        val update = new Array[Byte](updateLen)
-        stream.readFully(update)
-        accumulator.add(update)
+        logInfo("Reading stream for accumulator")
+        val aid = stream.readLong()
+        val accumType = stream.readInt()
+        logInfo("Accumulator " + aid + " type " + accumType)
+        val lac: AccumulatorV2[_, _] = if (accumType == 0) { 
+            val acc = new LongAccumulator() 
+            acc.setValue(stream.readLong())
+            acc
+        } else if (accumType == 1) { 
+            val acc = new DoubleAccumulator() 
+            acc.setValue(stream.readDouble())
+            acc
+        } else if (accumType == 2) {
+            val acc = new ComplexDoubleAccumulator()
+            acc.setValue(new DoubleComplex(stream.readDouble(), stream.readDouble()))
+            acc
+        } else {
+            logInfo ("Wow a custom one!!")
+            val acc = new PythonAccumulatorV2()
+            val updateLen = stream.readInt()
+            logInfo ("Update Length " + updateLen)
+            val update = new Array[Byte](updateLen)
+            stream.readFully(update)
+            acc.add(update)
+            acc
+        }
+        lac.setMetadata(new AccumulatorMetadata(aid, None, false))
+        context.registerAccumulator(lac)
+        logInfo(s"Got accumulator update ${aid}")
       }
       // Check whether the worker is ready to be re-used.
       if (stream.readInt() == SpecialLengths.END_OF_STREAM) {

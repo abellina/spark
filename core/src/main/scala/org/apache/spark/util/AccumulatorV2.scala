@@ -40,9 +40,25 @@ private[spark] case class AccumulatorMetadata(
  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely
  * (e.g., synchronized collections) because it will be read from other threads.
  */
-abstract class AccumulatorV2[IN, OUT] extends Serializable {
-  private[spark] var metadata: AccumulatorMetadata = _
+abstract class AccumulatorV2[IN, OUT] extends Serializable with Logging{
+  var metadata: AccumulatorMetadata = _
   private[this] var atDriverSide = true
+
+  def setMetadata(accumulatorMetadata: AccumulatorMetadata): Unit = {
+    logInfo(s"Setting metadata to ${accumulatorMetadata}")
+    atDriverSide = false
+    metadata = accumulatorMetadata
+    // Automatically register the accumulator when it is deserialized with the task closure.
+    // This is for external accumulators and internal ones that do not represent task level
+    // metrics, e.g. internal SQL metrics, which are per-operator.
+    //val taskContext = TaskContext.get()
+    //logInfo(s"Task context is ${taskContext}")
+    //if (taskContext != null) {
+    //  logInfo(s"NOT Registering accumulator from setMetadata ${this}")
+    //  //TODO: abe fix 
+    //  //taskContext.registerAccumulator(this)
+    //}
+  }
 
   private[spark] def register(
       sc: SparkContext,
@@ -155,6 +171,8 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {
    */
   def value: OUT
 
+  private[spark] def setValue(v: OUT): Unit
+
   // Called by Java when serializing an object
   final protected def writeReplace(): Any = {
     if (atDriverSide) {
@@ -192,6 +210,7 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {
       // metrics, e.g. internal SQL metrics, which are per-operator.
       val taskContext = TaskContext.get()
       if (taskContext != null) {
+        logInfo(s"Registering accumulator from readObject ${this}")
         taskContext.registerAccumulator(this)
       }
     } else {
@@ -200,8 +219,6 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {
   }
 
   override def toString: String = {
-    // getClass.getSimpleName can cause Malformed class name error,
-    // call safer `Utils.getSimpleName` instead
     if (metadata == null) {
       "Un-registered Accumulator: " + Utils.getSimpleName(getClass)
     } else {
@@ -296,8 +313,7 @@ class LongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {
   private var _count = 0L
 
   /**
-   * Returns false if this accumulator has had any values added to it or the sum is non-zero.
-   *
+   * Adds v to the accumulator, i.e. increment sum by v and count by 1.
    * @since 2.0.0
    */
   override def isZero: Boolean = _sum == 0L && _count == 0
@@ -359,7 +375,7 @@ class LongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {
         s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
   }
 
-  private[spark] def setValue(newValue: Long): Unit = _sum = newValue
+  private[spark] def setValue(newValue: jl.Long): Unit = _sum = newValue
 
   override def value: jl.Long = _sum
 }
@@ -375,9 +391,6 @@ class DoubleAccumulator extends AccumulatorV2[jl.Double, jl.Double] {
   private var _sum = 0.0
   private var _count = 0L
 
-  /**
-   * Returns false if this accumulator has had any values added to it or the sum is non-zero.
-   */
   override def isZero: Boolean = _sum == 0.0 && _count == 0
 
   override def copy(): DoubleAccumulator = {
@@ -437,9 +450,138 @@ class DoubleAccumulator extends AccumulatorV2[jl.Double, jl.Double] {
         s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
   }
 
-  private[spark] def setValue(newValue: Double): Unit = _sum = newValue
+  private[spark] def setValue(newValue: jl.Double): Unit = _sum = newValue
 
   override def value: jl.Double = _sum
+}
+
+
+class DoubleComplex  (var re: Double , var im: Double) extends Serializable {
+    def +(other: DoubleComplex): DoubleComplex = {
+        new DoubleComplex(re + other.re, im + other.im)
+    }
+    
+    def +(other: Double): DoubleComplex = {
+        new DoubleComplex(re + other, im)
+    }
+    
+    def -(other: DoubleComplex): DoubleComplex = {
+        new DoubleComplex(re + other.re, im + other.im)
+    }
+    
+    def -(other: Double): DoubleComplex = {
+        new DoubleComplex(re, im + other)
+    }
+
+    def *(other: DoubleComplex): DoubleComplex = {
+        new DoubleComplex(re * other.re, 0) +
+        new DoubleComplex(0, re * other.im) +
+        new DoubleComplex(0, im + other.re) +
+        new DoubleComplex(0, im + other.im)
+    }
+
+    def *(multiplicant: Double): DoubleComplex = {
+        // division by a scalar
+        new DoubleComplex(re * multiplicant, im * multiplicant)
+    }
+
+    def /(dividend: Double): DoubleComplex = {
+        // division by a scalar
+        new DoubleComplex(re / dividend, im / dividend)
+    }
+
+    def /(other: DoubleComplex): DoubleComplex = {
+        // division by a complex
+        val c = other.conj()
+        (c * re) / (c * im).re
+    }
+
+    def /=(other: DoubleComplex): DoubleComplex = {
+        val result = this / other
+        this.re = result.re
+        this.im = result.im
+        this
+    }
+
+    def ==(other: DoubleComplex): Boolean = {
+        re == other.re && im == other.im
+    }
+
+    def conj(): DoubleComplex = {
+        new DoubleComplex(re, -1 * im)
+    }
+
+    override def toString(): String = {
+        s"${re} + ${im}j"
+    }
+}
+
+import scala.language.implicitConversions
+class DoublePlusComplex(d: Double) {
+    def +(a: DoubleComplex) = a + d
+    def -(a: DoubleComplex) = a - d
+    def *(a: DoubleComplex) = a * d
+    def /(a: DoubleComplex) = a / d
+}
+
+//TODO: implicit def doublePlusComplex(d: Double): DoublePlusComplex = new DoublePlusComplex(d)
+
+class ComplexDoubleAccumulator extends AccumulatorV2[DoubleComplex, DoubleComplex] {
+  private var _sum = new DoubleComplex(0.0, 0.0)
+  private var _count = 0L
+
+  override def isZero: Boolean = _sum == new DoubleComplex(0.0, 0.0) && _count == 0
+
+  override def copy(): ComplexDoubleAccumulator = {
+    val newAcc = new ComplexDoubleAccumulator
+    newAcc._count = this._count
+    newAcc._sum = this._sum
+    newAcc
+  }
+
+  override def reset(): Unit = {
+    _sum = new DoubleComplex(0.0, 0.0)
+    _count = 0L
+  }
+
+  /**
+   * Adds v to the accumulator, i.e. increment sum by v and count by 1.
+   * @since 2.0.0
+   */
+  override def add(v: DoubleComplex): Unit = {
+    _sum += v
+    _count += 1
+  }
+  /**
+   * Returns the number of elements added to the accumulator.
+   * @since 2.0.0
+   */
+  def count: Long = _count
+
+  /**
+   * Returns the sum of elements added to the accumulator.
+   * @since 2.0.0
+   */
+  def sum: DoubleComplex = _sum
+
+  /**
+   * Returns the average of elements added to the accumulator.
+   * @since 2.0.0
+   */
+  def avg: DoubleComplex = _sum / _count
+
+  override def merge(other: AccumulatorV2[DoubleComplex, DoubleComplex]): Unit = other match {
+    case o: ComplexDoubleAccumulator =>
+      _sum += o.sum
+      _count += o.count
+    case _ =>
+      throw new UnsupportedOperationException(
+        s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
+  }
+
+  private[spark] def setValue(newValue: DoubleComplex): Unit = _sum = newValue
+
+  override def value: DoubleComplex = _sum
 }
 
 
@@ -451,9 +593,6 @@ class DoubleAccumulator extends AccumulatorV2[jl.Double, jl.Double] {
 class CollectionAccumulator[T] extends AccumulatorV2[T, java.util.List[T]] {
   private val _list: java.util.List[T] = Collections.synchronizedList(new ArrayList[T]())
 
-  /**
-   * Returns false if this accumulator instance has any values in it.
-   */
   override def isZero: Boolean = _list.isEmpty
 
   override def copyAndReset(): CollectionAccumulator[T] = new CollectionAccumulator
@@ -483,5 +622,38 @@ class CollectionAccumulator[T] extends AccumulatorV2[T, java.util.List[T]] {
   private[spark] def setValue(newValue: java.util.List[T]): Unit = {
     _list.clear()
     _list.addAll(newValue)
+  }
+}
+
+class LegacyAccumulatorWrapper[R, T](
+    initialValue: R,
+    param: org.apache.spark.AccumulableParam[R, T]) extends AccumulatorV2[T, R] {
+  private[spark] var _value = initialValue  // Current value on driver
+
+  @transient private lazy val _zero = param.zero(initialValue)
+
+  override def isZero: Boolean = _value.asInstanceOf[AnyRef].eq(_zero.asInstanceOf[AnyRef])
+  override def copy(): LegacyAccumulatorWrapper[R, T] = {
+    val acc = new LegacyAccumulatorWrapper(initialValue, param)
+    acc._value = _value
+    acc
+  }
+
+  override def reset(): Unit = {
+    _value = param.zero(initialValue)
+  }
+
+  override def add(v: T): Unit = _value = param.addAccumulator(_value, v)
+
+  override def merge(other: AccumulatorV2[T, R]): Unit = other match {
+    case o: LegacyAccumulatorWrapper[R, T] => _value = param.addInPlace(_value, o.value)
+    case _ => throw new UnsupportedOperationException(
+      s"Cannot merge ${this.getClass.getName} with ${other.getClass.getName}")
+  }
+
+  override def value: R = _value
+
+  private[spark] def setValue(newValue: R): Unit = {
+      _value = newValue
   }
 }

@@ -591,39 +591,13 @@ class BytesToString extends org.apache.spark.api.java.function.Function[Array[By
   override def call(arr: Array[Byte]) : String = new String(arr, StandardCharsets.UTF_8)
 }
 
-/**
- * Internal class that acts as an `AccumulatorV2` for Python accumulators. Inside, it
- * collects a list of pickled strings that we pass to Python through a socket.
- */
 trait PythonAccumulatorListener {
     def merge(data: JList[Array[Byte]])
 }
 
-private[spark] class PythonAccumulatorV2(
-    @transient private val serverHost: String,
-    private val serverPort: Int,
-    private val secretToken: String)
-  extends CollectionAccumulator[Array[Byte]] with Logging{
+private[spark] class PythonAccumulatorV2 extends CollectionAccumulator[Array[Byte]] with Logging {
 
-  Utils.checkHost(serverHost)
-
-  val bufferSize = SparkEnv.get.conf.getInt("spark.buffer.size", 65536)
-
-  /**
-   * We try to reuse a single Socket to transfer accumulator updates, as they are all added
-   * by the DAGScheduler's single-threaded RpcEndpoint anyway.
-   */
   @transient private var listener: PythonAccumulatorListener = _
-
-  private def openSocket(): Socket = synchronized {
-    if (socket == null || socket.isClosed) {
-      socket = new Socket(serverHost, serverPort)
-      logInfo(s"Connected to AccumulatorServer at host: $serverHost port: $serverPort")
-      // send the secret just for the initial authentication when opening a new connection
-      socket.getOutputStream.write(secretToken.getBytes(StandardCharsets.UTF_8))
-    }
-    socket
-  }
 
   def setListener(listener: PythonAccumulatorListener): Unit = {
       this.listener = listener
@@ -631,19 +605,19 @@ private[spark] class PythonAccumulatorV2(
 
   // Need to override so the types match with PythonFunction
   override def copyAndReset(): PythonAccumulatorV2 = {
-    new PythonAccumulatorV2(serverHost, serverPort, secretToken)
+    new PythonAccumulatorV2()
   }
 
   override def merge(other: AccumulatorV2[Array[Byte], JList[Array[Byte]]]): Unit = synchronized {
     val otherPythonAccumulator = other.asInstanceOf[PythonAccumulatorV2]
     // This conditional isn't strictly speaking needed - merging only currently happens on the
-    // driver program - but that isn't guaranteed so incase this changes.
-    if (serverHost == null) {
+    // driver program - but that isn't gauranteed so incase this changes.
+    if (listener == null) {
       // We are on the worker
       super.merge(otherPythonAccumulator)
     } else {
       logInfo(s"Sending accumulator updates to python: ${other.value}")
-      this.listener.merge(other.value)
+      listener.merge(other.value)
     }
   }
 }
