@@ -155,8 +155,6 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable with Logging{
    */
   def value: OUT
 
-  private[spark] def setValue(v: OUT): Unit
-
   // Called by Java when serializing an object
   final protected def writeReplace(): Any = {
     if (atDriverSide) {
@@ -299,9 +297,9 @@ private[spark] object AccumulatorContext extends Logging {
  *
  * @since 2.0.0
  */
-class LongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {
-  private var _sum = 0L
-  private var _count = 0L
+class LongAccumulator () extends AccumulatorV2[jl.Long, jl.Long] {
+  var _sum: Long = 0L
+  var _count: Long = 0L
 
   /**
    * Adds v to the accumulator, i.e. increment sum by v and count by 1.
@@ -378,9 +376,9 @@ class LongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {
  *
  * @since 2.0.0
  */
-class DoubleAccumulator extends AccumulatorV2[jl.Double, jl.Double] {
-  private var _sum = 0.0
-  private var _count = 0L
+class DoubleAccumulator () extends AccumulatorV2[jl.Double, jl.Double] {
+  var _sum: Double = 0.0
+  var _count: Long = 0L
 
   override def isZero: Boolean = _sum == 0.0 && _count == 0
 

@@ -454,9 +454,9 @@ private[spark] abstract class BasePythonRunner[IN, OUT](
     }
 
     object PythonAccumulatorType extends Enumeration {
-      val LONG_ACCUMULATOR = Value(1)
-      val DOUBLE_ACCUMULATOR = Value(2)
-      val COMPLEX_ACCUMULATOR = Value(3)
+      val LONG_ACCUMULATOR = Value(0)
+      val DOUBLE_ACCUMULATOR = Value(1)
+      val COMPLEX_ACCUMULATOR = Value(2)
       val CUSTOM_PYTHON_ACCUMULATOR = Value(-1)
     }
 
@@ -470,18 +470,20 @@ private[spark] abstract class BasePythonRunner[IN, OUT](
         logInfo("Accumulator " + aid + " type " + accumType)
         val lac: AccumulatorV2[_, _] = PythonAccumulatorType(accumType) match {
           case PythonAccumulatorType.LONG_ACCUMULATOR => {
-            val acc = new LongAccumulator()
+            val acc = new LongAccumulator() // should read a count
             acc.setValue(stream.readLong())
             acc
           }
           case PythonAccumulatorType.DOUBLE_ACCUMULATOR => {
-            val acc = new DoubleAccumulator()
+            val acc = new DoubleAccumulator() // should read a count
             acc.setValue(stream.readDouble())
             acc
           }
           case PythonAccumulatorType.COMPLEX_ACCUMULATOR => {
             val acc = new ComplexDoubleAccumulator()
-            acc.setValue(new DoubleComplex(stream.readDouble(), stream.readDouble()))
+            stream.readDouble()
+            stream.readDouble()
+            //TODO: acc.setValue(new DoubleComplex(stream.readDouble(), stream.readDouble()))
             acc
           }
           case _ => {

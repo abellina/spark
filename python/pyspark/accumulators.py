@@ -190,6 +190,8 @@ class Accumulator(object):
         _accumulatorRegistry[self.aid] = self
          # after this call, _jac has metadata populated
         self.accum_param.meta = AccumulatorMetadata(self._jac.metadata())
+        if accum_type is not AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR:
+            self._jac.setValue(self._value)
 
     def __reduce__(self):
         """Custom serialization; saves the zero value from our AccumulatorParam"""
@@ -202,11 +204,19 @@ class Accumulator(object):
         if self._deserialized:
             raise Exception("Accumulator.value cannot be accessed inside tasks")
         # we get it from the JVM side, if this is not a custom python accumulator
-        if (self.accum_param.accum_type == AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR):
+        accum_type = AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR
+
+        try:
+            accum_type = self.accum_param.accum_type # may not be defined
+        except AttributeError:
+            setattr(self.accum_param, "accum_type", AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR)
+
+        if (accum_type == AccumulatorType.CUSTOM_PYTHON_ACCUMULATOR):
             val = self._value
         else:
             val = self._jac.value()
-        if (self.accum_param.accum_type == AccumulatorType.COMPLEX_ACCUMULATOR):
+
+        if (accum_type == AccumulatorType.COMPLEX_ACCUMULATOR):
             return complex(val.re(), val.im())
         else:
             return val

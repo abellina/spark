@@ -403,6 +403,8 @@ class SparkContext(object):
         Default min number of partitions for Hadoop RDDs when not given by user
         """
         return self._jsc.sc().defaultMinPartitions()
+    def howdy(self):
+        print ("partner")
 
     def stop(self):
         """
@@ -838,7 +840,7 @@ class SparkContext(object):
         """
         return Broadcast(self, value, self._pickled_broadcast_vars)
 
-    def accumulator(self, value, name=None, accum_param=None):
+    def accumulator(self, value, accum_param=None, name=None):
         """
         Create an L{Accumulator} with the given initial value, using a given
         L{AccumulatorParam} helper object to define how to add values of the

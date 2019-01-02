@@ -117,7 +117,7 @@ def launch_gateway(conf=None):
 
     # Connect to the gateway
     gateway = JavaGateway(
-        callback_server_parameters=CallbackServerParameters(port=0, auth_token=gateway_secret),
+        callback_server_parameters=CallbackServerParameters(port=0, auth_token=gateway_secret, daemonize=True),
         gateway_parameters=GatewayParameters(port=gateway_port, auth_token=gateway_secret,
                                              auto_convert=True))
 

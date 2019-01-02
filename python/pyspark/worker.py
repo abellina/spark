@@ -399,8 +399,10 @@ def main(infile, outfile):
         try:
             write_long(aid, outfile)
             accum_type = -1
-            if (getattr(accum.accum_param, "accum_type")):
-                accum_type = accum_type
+            try:
+                accum_type = accum.accum_param.accum_type
+            except AttributeError:
+                pass
 
             write_int(accum_type, outfile)
 

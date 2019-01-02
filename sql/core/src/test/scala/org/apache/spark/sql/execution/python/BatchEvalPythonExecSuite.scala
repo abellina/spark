@@ -109,8 +109,7 @@ class DummyUDF extends PythonFunction(
   pythonIncludes = ArrayBuffer("").asJava,
   pythonExec = "",
   pythonVer = "",
-  broadcastVars = null,
-  accumulator = null)
+  broadcastVars = null)
 
 class MyDummyPythonUDF extends UserDefinedPythonFunction(
   name = "dummyUDF",

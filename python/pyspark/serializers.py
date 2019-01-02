@@ -610,7 +610,7 @@ class PickleSerializer(FramedSerializer):
             return pickle.loads(obj, encoding=encoding)
     else:
         def loads(self, obj, encoding=None):
-            return pickle.loads(obj)
+            return pickle.loads(str(obj))
 
 
 class CloudPickleSerializer(PickleSerializer):
