@@ -30,6 +30,7 @@ import com.google.common.io.ByteStreams
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FSDataInputStream, Path}
+import org.apache.hadoop.security.UserGroupInformation
 import org.scalatest.{BeforeAndAfterEach, Matchers}
 import org.scalatest.concurrent.{Signaler, ThreadSignaler, TimeLimits}
 import org.scalatest.time.SpanSugar._
@@ -1153,14 +1154,14 @@ class SparkSubmitSuite
     assert(exception.getMessage() === "hello")
   }
 
-  test("foo") {
+  test("abellina TODO") {
     val unusedJar = TestUtils.createJarWithClasses(Seq.empty)
     val args = Seq(
-      "--class", SimpleApplicationTest.getClass.getName.stripPrefix("$"),
+      "--class", classOf[TestProxiedApplication].getName(),
       "--name", "testApp",
       "--master", "local",
       "--deploy-mode", "client",
-      "--proxy-user", "nobody",
+      "--proxy-user", "spark_test_proxy_user",
       unusedJar.toString
     )
     submit.submit(new SparkSubmitArguments(args), false)
@@ -1389,3 +1390,12 @@ class TestSparkApplication extends SparkApplication with Matchers {
   }
 
 }
+
+class TestProxiedApplication extends SparkApplication {
+  override def start(args: Array[String], conf: SparkConf): Unit = {
+    println(UserGroupInformation.getCurrentUser())
+    println(args)
+    println(conf)
+  }
+}
+
