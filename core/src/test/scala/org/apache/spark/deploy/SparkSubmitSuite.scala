@@ -1153,6 +1153,19 @@ class SparkSubmitSuite
     assert(exception.getMessage() === "hello")
   }
 
+  test("foo") {
+    val unusedJar = TestUtils.createJarWithClasses(Seq.empty)
+    val args = Seq(
+      "--class", SimpleApplicationTest.getClass.getName.stripPrefix("$"),
+      "--name", "testApp",
+      "--master", "local",
+      "--deploy-mode", "client",
+      "--proxy-user", "nobody",
+      unusedJar.toString
+    )
+    submit.submit(new SparkSubmitArguments(args), false)
+  }
+
   test("support --py-files/spark.submit.pyFiles in non pyspark application") {
     val hadoopConf = new Configuration()
     updateConfWithFakeS3Fs(hadoopConf)

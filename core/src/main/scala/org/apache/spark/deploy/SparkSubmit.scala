@@ -131,16 +131,12 @@ private[spark] class SparkSubmit extends Logging {
   }
 
   /**
-   * Submit the application using the provided parameters.
+   * Submit the application using the provided parameters, ensuring to first wrap 
+   * in a doAs when --proxy-user is specified.
    *
-   * This runs in two steps. First, we prepare the launch environment by setting up
-   * the appropriate classpath, system properties, and application arguments for
-   * running the child main class based on the cluster manager and the deploy mode.
-   * Second, we use this launch environment to invoke the main method of the child
-   * main class.
+   * Exposed for testing.
    */
-  @tailrec
-  private def submit(args: SparkSubmitArguments, uninitLog: Boolean): Unit = {
+  private[deploy] def submit(args: SparkSubmitArguments, uninitLog: Boolean): Unit = {
 
     def doRunMain(): Unit = {
       if (args.proxyUser != null) {
@@ -773,7 +769,13 @@ private[spark] class SparkSubmit extends Logging {
   }
 
   /**
-   * Run the main method of the child class using the provided launch environment.
+   * Run the main method of the child class using the submit arguments.
+   * 
+   * This runs in two steps. First, we prepare the launch environment by setting up
+   * the appropriate classpath, system properties, and application arguments for
+   * running the child main class based on the cluster manager and the deploy mode.
+   * Second, we use this launch environment to invoke the main method of the child
+   * main class.
    *
    * Note that this main class will not be the one provided by the user if we're
    * running cluster deploy mode or python applications.
