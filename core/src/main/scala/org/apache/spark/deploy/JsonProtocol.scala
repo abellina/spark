@@ -37,7 +37,7 @@ private[deploy] object JsonProtocol {
 
   private def writeResourceRequirement(req: ResourceRequirement): JObject = {
     ("name" -> req.resourceName) ~
-    ("amount" -> req.amount)
+    ("amount" -> req.amount.toInt)
   }
 
   /**

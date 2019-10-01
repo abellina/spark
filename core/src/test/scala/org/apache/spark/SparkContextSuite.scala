@@ -828,7 +828,7 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
 
     assert(error.contains("The executor resource config: spark.executor.resource.gpu.amount = 1 " +
       "has to be >= the requested amount in task resource config: " +
-      "spark.task.resource.gpu.amount = 2"))
+      "spark.task.resource.gpu.amount = 2.0"))
   }
 
   test("Parse resources executor config not the same multiple numbers of the task requirements") {
@@ -842,7 +842,7 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
       sc = new SparkContext(conf)
     }.getMessage()
 
-    assert(error.contains("The configuration of resource: gpu (exec = 4, task = 2) will result " +
+    assert(error.contains("The configuration of resource: gpu (exec = 4, task = 2.0) will result " +
       "in wasted resources due to resource CPU limiting the number of runnable tasks per " +
       "executor to: 1. Please adjust your configuration."))
   }

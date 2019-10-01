@@ -2765,7 +2765,7 @@ object SparkContext extends Logging {
             " needs to be specified since a task requirement config: " +
             ResourceID(SPARK_TASK_PREFIX, taskReq.resourceName).amountConf +
             " was specified")
-        )
+        ).toInt
         // Make sure the executor resources are large enough to launch at least one task.
         if (execAmount < taskReq.amount) {
           throw new SparkException("The executor resource config: " +
@@ -2787,7 +2787,7 @@ object SparkContext extends Logging {
         val execAmount = executorResourcesAndAmounts(taskReq.resourceName)
         if (taskReq.amount * numSlots < execAmount) {
           val message = s"The configuration of resource: ${taskReq.resourceName} " +
-            s"(exec = ${execAmount}, task = ${taskReq.amount}) will result in wasted " +
+            s"(exec = ${execAmount.toInt}, task = ${taskReq.amount}) will result in wasted " +
             s"resources due to resource ${limitingResourceName} limiting the number of " +
             s"runnable tasks per executor to: ${numSlots}. Please adjust your configuration."
           if (Utils.isTesting) {
