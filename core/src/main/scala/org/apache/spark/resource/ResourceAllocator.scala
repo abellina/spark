@@ -30,19 +30,23 @@ trait ResourceAllocator {
 
   protected def resourceName: String
   protected def resourceAddresses: Seq[String]
+  protected def resourcesPerAddress: Int
 
   /**
    * Map from an address to its availability, the value `true` means the address is available,
    * while value `false` means the address is assigned.
    * TODO Use [[OpenHashMap]] instead to gain better performance.
    */
-  private lazy val addressAvailabilityMap = mutable.HashMap(resourceAddresses.map(_ -> true): _*)
+  private lazy val addressAvailabilityMap = {
+    mutable.HashMap(resourceAddresses.map(_ -> resourcesPerAddress): _*)
+  }
 
+  // "0" -> 4, "1"-> 1
   /**
    * Sequence of currently available resource addresses.
    */
   def availableAddrs: Seq[String] = addressAvailabilityMap.flatMap { case (addr, available) =>
-    if (available) Some(addr) else None
+    (0 until available).map(_ => addr)
   }.toSeq
 
   /**
@@ -50,7 +54,7 @@ trait ResourceAllocator {
    */
   private[spark] def assignedAddrs: Seq[String] = addressAvailabilityMap
     .flatMap { case (addr, available) =>
-      if (!available) Some(addr) else None
+      (0 until resourcesPerAddress - available).map(_ => addr)
     }.toSeq
 
   /**
@@ -65,8 +69,9 @@ trait ResourceAllocator {
           s"address $address doesn't exist.")
       }
       val isAvailable = addressAvailabilityMap(address)
-      if (isAvailable) {
-        addressAvailabilityMap(address) = false
+      println(s"Acquiring unit of $address from $addressAvailabilityMap")
+      if (isAvailable > 0) {
+        addressAvailabilityMap(address) = addressAvailabilityMap(address) - 1
       } else {
         throw new SparkException("Try to acquire an address that is not available. " +
           s"$resourceName address $address is not available.")
@@ -86,8 +91,9 @@ trait ResourceAllocator {
           s"address $address doesn't exist.")
       }
       val isAvailable = addressAvailabilityMap(address)
-      if (!isAvailable) {
-        addressAvailabilityMap(address) = true
+      println(s"Releasing unit of $address from $addressAvailabilityMap")
+      if (isAvailable < resourcesPerAddress) {
+        addressAvailabilityMap(address) = addressAvailabilityMap(address) + 1
       } else {
         throw new SparkException(s"Try to release an address that is not assigned. $resourceName " +
           s"address $address is not assigned.")

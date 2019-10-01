@@ -43,11 +43,11 @@ private[spark] case class ResourceID(componentName: String, resourceName: String
 
 private[spark] case class ResourceRequest(
     id: ResourceID,
-    amount: Int,
+    amount: Double,
     discoveryScript: Option[String],
     vendor: Option[String])
 
-private[spark] case class ResourceRequirement(resourceName: String, amount: Int)
+private[spark] case class ResourceRequirement(resourceName: String, amount: Double)
 
 /**
  * Case class representing allocated resource addresses for a specific resource.
@@ -72,7 +72,7 @@ private[spark] object ResourceUtils extends Logging {
     val settings = sparkConf.getAllWithPrefix(resourceId.confPrefix).toMap
     val amount = settings.getOrElse(AMOUNT,
       throw new SparkException(s"You must specify an amount for ${resourceId.resourceName}")
-    ).toInt
+    ).toDouble
     val discoveryScript = settings.get(DISCOVERY_SCRIPT)
     val vendor = settings.get(VENDOR)
     ResourceRequest(resourceId, amount, discoveryScript, vendor)
@@ -94,9 +94,16 @@ private[spark] object ResourceUtils extends Logging {
 
   def parseResourceRequirements(sparkConf: SparkConf, componentName: String)
     : Seq[ResourceRequirement] = {
-    parseAllResourceRequests(sparkConf, componentName).map { request =>
+    parseAllResourceRequests(sparkConf, componentName).map { request => {
+      /*
+      val asInt = if (request.amount <= 0.5d) {
+        Math.ceil(1/request.amount).toInt
+      } else {
+        request.amount.toInt
+      }
+       */
       ResourceRequirement(request.id.resourceName, request.amount)
-    }
+    }}
   }
 
   def resourcesMeetRequirements(

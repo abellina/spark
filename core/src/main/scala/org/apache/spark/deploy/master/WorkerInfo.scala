@@ -28,6 +28,7 @@ private[spark] case class WorkerResourceInfo(name: String, addresses: Seq[String
 
   override protected def resourceName = this.name
   override protected def resourceAddresses = this.addresses
+  override protected def resourcesPerAddress: Int = 1
 
   def acquire(amount: Int): ResourceInformation = {
     val allocated = availableAddrs.take(amount)
@@ -152,7 +153,7 @@ private[spark] class WorkerInfo(
     resourceReqs.map { req =>
       val rName = req.resourceName
       val amount = req.amount
-      rName -> resources(rName).acquire(amount)
+      rName -> resources(rName).acquire(Math.ceil(amount).toInt)
     }.toMap
   }
 

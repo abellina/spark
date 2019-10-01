@@ -2775,7 +2775,7 @@ object SparkContext extends Logging {
             s" = ${taskReq.amount}")
         }
         // Compare and update the max slots each executor can provide.
-        val resourceNumSlots = execAmount / taskReq.amount
+        val resourceNumSlots = Math.floor(execAmount / taskReq.amount).toInt
         if (resourceNumSlots < numSlots) {
           numSlots = resourceNumSlots
           limitingResourceName = taskReq.resourceName

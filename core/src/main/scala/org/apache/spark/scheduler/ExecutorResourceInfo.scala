@@ -26,9 +26,10 @@ import org.apache.spark.resource.{ResourceAllocator, ResourceInformation}
  * @param name Resource name
  * @param addresses Resource addresses provided by the executor
  */
-private[spark] class ExecutorResourceInfo(name: String, addresses: Seq[String])
+private[spark] class ExecutorResourceInfo(name: String, addresses: Seq[String], resources: Double)
   extends ResourceInformation(name, addresses.toArray) with ResourceAllocator {
 
   override protected def resourceName = this.name
   override protected def resourceAddresses = this.addresses
+  override protected def resourcesPerAddress = if (resources <= 0.5) { Math.floor(1/resources).toInt } else { 1 }
 }

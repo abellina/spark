@@ -451,7 +451,7 @@ private[spark] class TaskSetManager(
           assert(rAddresses.size >= count, s"Required $count $rName addresses, but only " +
             s"${rAddresses.size} available.")
           // We'll drop the allocated addresses later inside TaskSchedulerImpl.
-          val allocatedAddresses = rAddresses.take(count)
+          val allocatedAddresses = rAddresses.take(Math.ceil(count).toInt)
           (rName, new ResourceInformation(rName, allocatedAddresses.toArray))
         }.toMap
 

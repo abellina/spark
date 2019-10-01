@@ -200,7 +200,7 @@ private[spark] object StandaloneResourceUtils extends Logging {
               // note this is a meaningless return value, just to avoid creating any new object
               available
             } else {
-              available.take(amount)
+              available.take(Math.ceil(amount).toInt)
             }
           }
           rName -> assigned

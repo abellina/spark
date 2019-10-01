@@ -89,6 +89,7 @@ private[spark] class ApplicationInfo(
       desc.memoryPerExecutorMB, resources)
     executors(exec.id) = exec
     coresGranted += cores
+    println("add: cores granted is now " + coresGranted)
     exec
   }
 
@@ -97,6 +98,7 @@ private[spark] class ApplicationInfo(
       removedExecutors += executors(exec.id)
       executors -= exec.id
       coresGranted -= exec.cores
+      println("remove: cores granted is now " + coresGranted)
     }
   }
 
