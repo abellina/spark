@@ -263,8 +263,8 @@ class WorkerSuite extends SparkFunSuite with Matchers with BeforeAndAfter {
       val ja = Extraction.decompose(Seq(gpuArgs, fpgaArgs))
       val f1 = createTempJsonFile(dir, "resources", ja)
       conf.set(SPARK_WORKER_RESOURCE_FILE.key, f1)
-      conf.set(WORKER_GPU_ID.amountConf, "2")
-      conf.set(WORKER_FPGA_ID.amountConf, "3")
+      conf.set(WORKER_GPU_ID.amountConf, "2.0")
+      conf.set(WORKER_FPGA_ID.amountConf, "3.0")
       val worker = makeWorker(conf)
       worker.rpcEnv.setupEndpoint("worker", worker)
       eventually(timeout(10.seconds)) {
@@ -283,7 +283,7 @@ class WorkerSuite extends SparkFunSuite with Matchers with BeforeAndAfter {
       val scriptPath = createTempScriptWithExpectedOutput(dir, "fpgaDiscoverScript",
         """{"name": "fpga","addresses":["f1", "f2", "f3"]}""")
       conf.set(WORKER_FPGA_ID.discoveryScriptConf, scriptPath)
-      conf.set(WORKER_FPGA_ID.amountConf, "3")
+      conf.set(WORKER_FPGA_ID.amountConf, "3.0")
       val worker = makeWorker(conf)
       worker.rpcEnv.setupEndpoint("worker", worker)
       eventually(timeout(10.seconds)) {
@@ -306,8 +306,8 @@ class WorkerSuite extends SparkFunSuite with Matchers with BeforeAndAfter {
         """{"name": "fpga","addresses":["f1", "f2", "f3"]}""")
       conf.set(SPARK_WORKER_RESOURCE_FILE.key, resourcesPath)
       conf.set(WORKER_FPGA_ID.discoveryScriptConf, scriptPath)
-      conf.set(WORKER_FPGA_ID.amountConf, "3")
-      conf.set(WORKER_GPU_ID.amountConf, "2")
+      conf.set(WORKER_FPGA_ID.amountConf, "3.0")
+      conf.set(WORKER_GPU_ID.amountConf, "2.0")
       val worker = makeWorker(conf)
       worker.rpcEnv.setupEndpoint("worker", worker)
       eventually(timeout(10.seconds)) {
