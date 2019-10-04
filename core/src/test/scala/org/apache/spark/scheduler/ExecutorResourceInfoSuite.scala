@@ -89,18 +89,35 @@ class ExecutorResourceInfoSuite extends SparkFunSuite {
     assert(e.getMessage.contains("Try to release an address that doesn't exist."))
   }
 
-  test("Fractional") {
-    // Init Executor Resource.
-    val info = new ExecutorResourceInfo(GPU, ArrayBuffer("0", "1", "2", "3"), 0.25)
-    info.acquire(Seq("0"))
-    info.acquire(Seq("0"))
-    info.acquire(Seq("0"))
-    info.acquire(Seq("0"))
-
-    assertThrows[SparkException] {
-      info.acquire(Seq("0"))
+  test("Ensure that we can acquire the same resource multiple times, upto the configured amount") {
+    val ratioSlots = Seq(
+      (0.10, 10), (0.11, 9), (0.125, 8), (0.14, 7), (0.16, 6), 
+      (0.20, 5), (0.25, 4), (0.33, 3), (0.5, 2), 
+      (0.51, 1), (0.9, 1), (1.0, 1),
+      (2.0, 2), (3.0, 3), (4.0, 4),
+      // if the amount provided is greater than 1, we throw
+      (1.5, 0), (2.5, 0)) // fractional, above 1, error out
+    val addresses = ArrayBuffer("0", "1", "2", "3")
+    ratioSlots.foreach {
+      case (ratio, slots) =>
+        if (ratio > 0.5 && ratio % 1 != 0) {
+          System.out.println("Expecting this ratio to throw " + ratio);
+          assertThrows[SparkException] {
+            new ExecutorResourceInfo(GPU, addresses, ratio)
+          }
+        } else {
+          val info = new ExecutorResourceInfo(GPU, addresses, ratio)
+          for (slot <- 0 until slots) {
+            addresses.foreach(addr => info.acquire(Seq(addr)))
+          }
+          addresses.foreach {
+            case addr =>
+              assertThrows[SparkException] {
+                info.acquire(Seq(addr))
+              }
+              assert(!info.availableAddrs.contains(addr))
+          }
+        }
     }
-
-    assert(!info.availableAddrs.contains("0"))
   }
 }

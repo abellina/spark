@@ -95,13 +95,6 @@ private[spark] object ResourceUtils extends Logging {
   def parseResourceRequirements(sparkConf: SparkConf, componentName: String)
     : Seq[ResourceRequirement] = {
     parseAllResourceRequests(sparkConf, componentName).map { request => {
-      /*
-      val asInt = if (request.amount <= 0.5d) {
-        Math.ceil(1/request.amount).toInt
-      } else {
-        request.amount.toInt
-      }
-       */
       ResourceRequirement(request.id.resourceName, request.amount)
     }}
   }

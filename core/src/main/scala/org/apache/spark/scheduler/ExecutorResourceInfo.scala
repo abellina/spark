@@ -17,6 +17,7 @@
 
 package org.apache.spark.scheduler
 
+import org.apache.spark.SparkException
 import org.apache.spark.resource.{ResourceAllocator, ResourceInformation}
 
 /**
@@ -26,10 +27,19 @@ import org.apache.spark.resource.{ResourceAllocator, ResourceInformation}
  * @param name Resource name
  * @param addresses Resource addresses provided by the executor
  */
-private[spark] class ExecutorResourceInfo(name: String, addresses: Seq[String], resources: Double)
+private[spark] class ExecutorResourceInfo(name: String, addresses: Seq[String], amountPerAddress: Double)
   extends ResourceInformation(name, addresses.toArray) with ResourceAllocator {
+
+  private val amountPerAddressInt = if (amountPerAddress <= 0.5) {
+    Math.floor(1/amountPerAddress).toInt
+  } else if (amountPerAddress % 1 != 0 && amountPerAddress < 1.0) {
+    throw new SparkException(
+      s"The resource amount (${amountPerAddress}) must be either <= 0.5, or 1")
+  } else {
+    1
+  }
 
   override protected def resourceName = this.name
   override protected def resourceAddresses = this.addresses
-  override protected def resourcesPerAddress = if (resources <= 0.5) { Math.floor(1/resources).toInt } else { 1 }
+  override protected def resourcesPerAddress = amountPerAddressInt
 }
