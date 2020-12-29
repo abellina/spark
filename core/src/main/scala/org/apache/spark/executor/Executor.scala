@@ -211,12 +211,17 @@ private[spark] class Executor(
    */
   private var heartbeatFailures = 0
 
+  logInfo("STARTING HEARTBEATER")
+
   heartbeater.start()
+
+  logInfo("STARTING PLUGINS")
 
   // Plugins need to load using a class loader that includes the executor's user classpath.
   // Plugins also needs to be initialized after the heartbeater started
   // to avoid blocking to send heartbeat (see SPARK-32175).
   private val plugins: Option[PluginContainer] = Utils.withContextClassLoader(replClassLoader) {
+    logInfo(s"plugin resources: ${resources}")
     PluginContainer(env, resources.asJava)
   }
 
@@ -883,6 +888,7 @@ private[spark] class Executor(
 
   /** Reports heartbeat and metrics for active tasks to the driver. */
   private def reportHeartBeat(): Unit = {
+    logInfo("Heartbeating")
     // list of (task id, accumUpdates) to send back to the driver
     val accumUpdates = new ArrayBuffer[(Long, Seq[AccumulatorV2[_, _]])]()
     val curGCTime = computeTotalGcTime()
@@ -910,8 +916,10 @@ private[spark] class Executor(
     val message = Heartbeat(executorId, accumUpdates.toArray, env.blockManager.blockManagerId,
       executorUpdates)
     try {
+      logInfo("Sending RPC")
       val response = heartbeatReceiverRef.askSync[HeartbeatResponse](
         message, new RpcTimeout(HEARTBEAT_INTERVAL_MS.millis, EXECUTOR_HEARTBEAT_INTERVAL.key))
+      logInfo(s"Got HB response ${response}")
       if (response.reregisterBlockManager) {
         logInfo("Told to re-register on heartbeat")
         env.blockManager.reregister()

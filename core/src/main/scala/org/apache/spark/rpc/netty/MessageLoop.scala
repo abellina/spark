@@ -103,7 +103,7 @@ private class SharedMessageLoop(
     conf: SparkConf,
     dispatcher: Dispatcher,
     numUsableCores: Int)
-  extends MessageLoop(dispatcher) {
+  extends MessageLoop(dispatcher) with Logging {
 
   private val endpoints = new ConcurrentHashMap[String, Inbox]()
 
@@ -146,6 +146,7 @@ private class SharedMessageLoop(
   }
 
   def register(name: String, endpoint: RpcEndpoint): Unit = {
+    logInfo(s"Registering ${name}")
     val inbox = new Inbox(name, endpoint)
     endpoints.put(name, inbox)
     // Mark active to handle the OnStart message.
@@ -160,7 +161,8 @@ private class DedicatedMessageLoop(
     name: String,
     endpoint: IsolatedRpcEndpoint,
     dispatcher: Dispatcher)
-  extends MessageLoop(dispatcher) {
+  extends MessageLoop(dispatcher) with Logging {
+  logInfo(s"new DedicatedMessageLoop ${name}")
 
   private val inbox = new Inbox(name, endpoint)
 

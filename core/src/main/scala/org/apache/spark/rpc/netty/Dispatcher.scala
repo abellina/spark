@@ -53,6 +53,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
   private var stopped = false
 
   def registerRpcEndpoint(name: String, endpoint: RpcEndpoint): NettyRpcEndpointRef = {
+    logInfo(s"At dispatcher: registering ${name} for ${endpoint}")
     val addr = RpcEndpointAddress(nettyEnv.address, name)
     val endpointRef = new NettyRpcEndpointRef(nettyEnv.conf, addr, nettyEnv)
     synchronized {
@@ -72,8 +73,10 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
       try {
         messageLoop = endpoint match {
           case e: IsolatedRpcEndpoint =>
+            logInfo(s"At dispatcher: registering ${name} for is dedicated.")
             new DedicatedMessageLoop(name, e, this)
           case _ =>
+            logInfo(s"At dispatcher: registering ${name} for is shared.")
             sharedLoop.register(name, endpoint)
             sharedLoop
         }
