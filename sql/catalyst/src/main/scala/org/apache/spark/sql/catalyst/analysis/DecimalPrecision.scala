@@ -126,9 +126,7 @@ object DecimalPrecision extends TypeCoercionRule {
       } else {
         DecimalType.bounded(p1 + p2 + 1, s1 + s2)
       }
-      val widerType = widerDecimalType(p1, s1, p2, s2)
-      CheckOverflow(Multiply(promotePrecision(e1, widerType), promotePrecision(e2, widerType)),
-        resultType, nullOnOverflow)
+      CheckOverflow(Multiply(e1, e2), resultType, nullOnOverflow)
 
     case Divide(e1 @ DecimalType.Expression(p1, s1), e2 @ DecimalType.Expression(p2, s2)) =>
       val resultType = if (SQLConf.get.decimalOperationsAllowPrecisionLoss) {
@@ -148,9 +146,7 @@ object DecimalPrecision extends TypeCoercionRule {
         }
         DecimalType.bounded(intDig + decDig, decDig)
       }
-      val widerType = widerDecimalType(p1, s1, p2, s2)
-      CheckOverflow(Divide(promotePrecision(e1, widerType), promotePrecision(e2, widerType)),
-        resultType, nullOnOverflow)
+      CheckOverflow(Divide(e1, e2), resultType, nullOnOverflow)
 
     case Remainder(e1 @ DecimalType.Expression(p1, s1), e2 @ DecimalType.Expression(p2, s2)) =>
       val resultType = if (SQLConf.get.decimalOperationsAllowPrecisionLoss) {
