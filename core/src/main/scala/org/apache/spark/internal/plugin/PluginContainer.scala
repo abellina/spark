@@ -28,13 +28,13 @@ import org.apache.spark.resource.ResourceInformation
 import org.apache.spark.util.Utils
 
 sealed abstract class PluginContainer {
-
   def shutdown(): Unit
   def registerMetrics(appId: String): Unit
   def onTaskStart(): Unit
   def onTaskSucceeded(): Unit
   def onTaskFailed(failureReason: TaskFailedReason): Unit
-
+  def onEventStarted(evt: String): Unit
+  def onEventStopped(evt: String): Unit
 }
 
 private class DriverPluginContainer(
@@ -99,6 +99,9 @@ private class DriverPluginContainer(
   override def onTaskFailed(failureReason: TaskFailedReason): Unit = {
     throw new IllegalStateException("Should not be called for the driver container.")
   }
+
+  override def onEventStarted(evt: String): Unit = {}
+  override def onEventStopped(evt: String): Unit = {}
 }
 
 private class ExecutorPluginContainer(
@@ -180,6 +183,14 @@ private class ExecutorPluginContainer(
           logInfo(s"Exception while calling onTaskFailed on plugin $name.", t)
       }
     }
+  }
+
+  override def onEventStarted(evt: String): Unit = {
+    executorPlugins.foreach { case (name, plugin) => plugin.onEventStarted(evt) }
+  }
+
+  override def onEventStopped(evt: String): Unit = {
+    executorPlugins.foreach { case (name, plugin) => plugin.onEventStopped(evt) }
   }
 }
 

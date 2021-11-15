@@ -429,11 +429,13 @@ private[spark] class Executor(
     }
 
     override def run(): Unit = {
+      plugins.foreach(_.onEventStarted("task_run_whole"))
       setMDCForTask(taskName, mdcProperties)
       threadId = Thread.currentThread.getId
       Thread.currentThread.setName(threadName)
       val threadMXBean = ManagementFactory.getThreadMXBean
       val taskMemoryManager = new TaskMemoryManager(env.memoryManager, taskId)
+      plugins.foreach(_.onEventStarted("task_deserialize"))
       val deserializeStartTimeNs = System.nanoTime()
       val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
         threadMXBean.getCurrentThreadCpuTime
@@ -458,6 +460,7 @@ private[spark] class Executor(
           taskDescription.serializedTask, Thread.currentThread.getContextClassLoader)
         task.localProperties = taskDescription.properties
         task.setTaskMemoryManager(taskMemoryManager)
+        plugins.foreach(_.onEventStopped("task_deserialize"))
 
         // If this task has been killed before we deserialized it, let's quit now. Otherwise,
         // continue executing the task.
@@ -488,16 +491,20 @@ private[spark] class Executor(
           threadMXBean.getCurrentThreadCpuTime
         } else 0L
         var threwException = true
+
         val value = Utils.tryWithSafeFinally {
+          plugins.foreach(_.onEventStarted("task_run"))
           val res = task.run(
             taskAttemptId = taskId,
             attemptNumber = taskDescription.attemptNumber,
             metricsSystem = env.metricsSystem,
             resources = taskDescription.resources,
             plugins = plugins)
+          plugins.foreach(_.onEventStopped("task_run"))
           threwException = false
           res
         } {
+          plugins.foreach(_.onEventStarted("task_release_locks"))
           val releasedLocks = env.blockManager.releaseAllLocksForTask(taskId)
           val freedMemory = taskMemoryManager.cleanUpAllAllocatedMemory()
 
@@ -520,6 +527,7 @@ private[spark] class Executor(
               logInfo(errMsg)
             }
           }
+          plugins.foreach(_.onEventStopped("task_release_locks"))
         }
         task.context.fetchFailed.foreach { fetchFailure =>
           // uh-oh.  it appears the user code has caught the fetch-failure without throwing any
@@ -537,11 +545,14 @@ private[spark] class Executor(
         // If the task has been killed, let's fail it.
         task.context.killTaskIfInterrupted()
 
+        plugins.foreach(_.onEventStarted("task_result_serializer"))
         val resultSer = env.serializer.newInstance()
         val beforeSerializationNs = System.nanoTime()
         val valueBytes = resultSer.serialize(value)
         val afterSerializationNs = System.nanoTime()
+        plugins.foreach(_.onEventStopped("task_result_serializer"))
 
+        plugins.foreach(_.onEventStarted("task_metrics_serializer"))
         // Deserialization happens in two parts: first, we deserialize a Task object, which
         // includes the Partition. Second, Task.run() deserializes the RDD and function to be run.
         task.metrics.setExecutorDeserializeTime(TimeUnit.NANOSECONDS.toMillis(
@@ -605,7 +616,9 @@ private[spark] class Executor(
         val directResult = new DirectTaskResult(valueBytes, accumUpdates, metricPeaks)
         val serializedDirectResult = ser.serialize(directResult)
         val resultSize = serializedDirectResult.limit()
+        plugins.foreach(_.onEventStopped("task_metrics_serializer"))
 
+        plugins.foreach(_.onEventStarted("send_result"))
         // directSend = sending directly back to the driver
         val serializedResult: ByteBuffer = {
           if (maxResultSize > 0 && resultSize > maxResultSize) {
@@ -631,6 +644,7 @@ private[spark] class Executor(
         setTaskFinishedAndClearInterruptStatus()
         plugins.foreach(_.onTaskSucceeded())
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
+        plugins.foreach(_.onEventStopped("send_result"))
       } catch {
         case t: TaskKilledException =>
           logInfo(s"Executor killed $taskName, reason: ${t.reason}")
@@ -721,12 +735,15 @@ private[spark] class Executor(
             uncaughtExceptionHandler.uncaughtException(Thread.currentThread(), t)
           }
       } finally {
+        plugins.foreach(_.onEventStarted("task_end_finally"))
         runningTasks.remove(taskId)
         if (taskStarted) {
           // This means the task was successfully deserialized, its stageId and stageAttemptId
           // are known, and metricsPoller.onTaskStart was called.
           metricsPoller.onTaskCompletion(taskId, task.stageId, task.stageAttemptId)
         }
+        plugins.foreach(_.onEventStopped("task_end_finally"))
+        plugins.foreach(_.onEventStopped("task_run_whole"))
       }
     }
 

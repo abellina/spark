@@ -17,9 +17,10 @@
 
 package org.apache.spark.serializer
 
+import org.apache.spark.internal.plugin.PluginContainer
+
 import java.io.{EOFException, InputStream, OutputStream}
 import java.nio.ByteBuffer
-
 import scala.reflect.ClassTag
 
 /**
@@ -42,7 +43,8 @@ class TestSerializerInstance extends SerializerInstance {
   override def deserialize[T: ClassTag](bytes: ByteBuffer): T =
     throw new UnsupportedOperationException
 
-  override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader): T =
+  override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader,
+                                        plugins: Option[PluginContainer]): T =
     throw new UnsupportedOperationException
 }
 

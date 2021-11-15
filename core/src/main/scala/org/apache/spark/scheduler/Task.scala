@@ -98,7 +98,8 @@ private[spark] abstract class Task[T](
       localProperties,
       metricsSystem,
       metrics,
-      resources)
+      resources,
+      plugins)
 
     context = if (isBarrier) {
       new BarrierTaskContext(taskContext)
@@ -128,7 +129,7 @@ private[spark] abstract class Task[T](
     plugins.foreach(_.onTaskStart())
 
     try {
-      runTask(context)
+      runTask(context, plugins)
     } catch {
       case e: Throwable =>
         // Catch all errors; run task failure callbacks, and rethrow the exception.
@@ -174,6 +175,10 @@ private[spark] abstract class Task[T](
 
   def setTaskMemoryManager(taskMemoryManager: TaskMemoryManager): Unit = {
     this.taskMemoryManager = taskMemoryManager
+  }
+
+  def runTask(context: TaskContext, plugins: Option[PluginContainer]): T = {
+    runTask(context)
   }
 
   def runTask(context: TaskContext): T

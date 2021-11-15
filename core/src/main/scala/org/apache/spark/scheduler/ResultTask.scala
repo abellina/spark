@@ -21,9 +21,10 @@ import java.io._
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.Properties
-
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.internal.Logging
+import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.rdd.RDD
 
 /**
@@ -66,15 +67,20 @@ private[spark] class ResultTask[T, U](
     isBarrier: Boolean = false)
   extends Task[U](stageId, stageAttemptId, partition.index, localProperties, serializedTaskMetrics,
     jobId, appId, appAttemptId, isBarrier)
-  with Serializable {
+  with Serializable with Logging {
 
   @transient private[this] val preferredLocs: Seq[TaskLocation] = {
     if (locs == null) Nil else locs.distinct
   }
 
   override def runTask(context: TaskContext): U = {
+    runTask(context, None)
+  }
+  override def runTask(context: TaskContext, plugins: Option[PluginContainer]): U = {
     // Deserialize the RDD and the func using the broadcast variables.
+    plugins.foreach(_.onEventStarted("result_task_run"))
     val threadMXBean = ManagementFactory.getThreadMXBean
+    plugins.foreach(_.onEventStarted("result_task_deserialize"))
     val deserializeStartTimeNs = System.nanoTime()
     val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime
@@ -82,12 +88,21 @@ private[spark] class ResultTask[T, U](
     val ser = SparkEnv.get.closureSerializer.newInstance()
     val (rdd, func) = ser.deserialize[(RDD[T], (TaskContext, Iterator[T]) => U)](
       ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
+    plugins.foreach(_.onEventStopped("result_task_deserialize"))
     _executorDeserializeTimeNs = System.nanoTime() - deserializeStartTimeNs
     _executorDeserializeCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
 
-    func(context, rdd.iterator(partition, context))
+    plugins.foreach(_.onEventStarted("result_task_func"))
+    logInfo(s"result_task_func: ${func.toString()}")
+    plugins.foreach(_.onEventStarted("result_task_make_iter"))
+    val iter: Iterator[T] = rdd.iterator(partition, context)
+    plugins.foreach(_.onEventStopped("result_task_make_iter"))
+    val res = func(context, iter)
+    plugins.foreach(_.onEventStopped("result_task_func"))
+    plugins.foreach(_.onEventStopped("result_task_run"))
+    res
   }
 
   // This is only callable on the driver side.

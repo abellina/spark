@@ -22,6 +22,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
+import org.apache.spark.internal.plugin.PluginContainer;
+import scala.Option;
 import scala.reflect.ClassTag;
 
 import org.apache.spark.annotation.Private;
@@ -87,6 +89,10 @@ public final class DummySerializerInstance extends SerializerInstance {
 
   @Override
   public <T> T deserialize(ByteBuffer bytes, ClassTag<T> ev1) {
+    throw new UnsupportedOperationException();
+  }
+  @Override
+  public <T> T deserialize(ByteBuffer bytes, ClassLoader loader, Option<PluginContainer> plugins, ClassTag<T> tag) {
     throw new UnsupportedOperationException();
   }
 }

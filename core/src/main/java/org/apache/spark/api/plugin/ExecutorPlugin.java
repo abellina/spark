@@ -96,4 +96,7 @@ public interface ExecutorPlugin {
    * @since 3.1.0
    */
   default void onTaskFailed(TaskFailedReason failureReason) {}
+
+  default void onEventStarted(String evt) {}
+  default void onEventStopped(String evt) {}
 }

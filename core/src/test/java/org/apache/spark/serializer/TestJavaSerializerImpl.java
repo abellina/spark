@@ -21,6 +21,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
+import org.apache.spark.internal.plugin.PluginContainer;
+import scala.Option;
 import scala.reflect.ClassTag;
 
 
@@ -47,6 +49,11 @@ class TestJavaSerializerImpl extends Serializer {
 
     @Override
     public <T> T deserialize(ByteBuffer bytes, ClassTag<T> evidence$1) {
+      return null;
+    }
+
+    @Override
+    public <T> T deserialize(ByteBuffer bytes, ClassLoader loader, Option<PluginContainer> plugins, ClassTag<T> classTag$T$0) {
       return null;
     }
 

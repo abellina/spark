@@ -20,10 +20,9 @@ package org.apache.spark.serializer
 import java.io._
 import java.nio.ByteBuffer
 import javax.annotation.concurrent.NotThreadSafe
-
 import scala.reflect.ClassTag
-
 import org.apache.spark.annotation.{DeveloperApi, Private}
+import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.util.NextIterator
 
 /**
@@ -113,7 +112,12 @@ abstract class SerializerInstance {
 
   def deserialize[T: ClassTag](bytes: ByteBuffer): T
 
-  def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader): T
+  def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader): T = {
+    deserialize(bytes, loader, None)
+  }
+
+  def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader,
+                               plugins: Option[PluginContainer]): T
 
   def serializeStream(s: OutputStream): SerializationStream
 

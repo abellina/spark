@@ -21,12 +21,10 @@ import java.io._
 import java.nio.ByteBuffer
 import java.util.Locale
 import javax.annotation.Nullable
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 import scala.util.control.NonFatal
-
 import com.esotericsoftware.kryo.{Kryo, KryoException, Serializer => KryoClassSerializer}
 import com.esotericsoftware.kryo.io.{Input => KryoInput, Output => KryoOutput}
 import com.esotericsoftware.kryo.io.{UnsafeInput => KryoUnsafeInput, UnsafeOutput => KryoUnsafeOutput}
@@ -35,17 +33,19 @@ import com.esotericsoftware.kryo.serializers.{JavaSerializer => KryoJavaSerializ
 import com.twitter.chill.{AllScalaRegistrar, EmptyScalaKryoInstantiator}
 import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.roaringbitmap.RoaringBitmap
-
 import org.apache.spark._
 import org.apache.spark.api.python.PythonBroadcast
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Kryo._
 import org.apache.spark.internal.io.FileCommitProtocol._
+import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.network.util.ByteUnit
 import org.apache.spark.scheduler.{CompressedMapStatus, HighlyCompressedMapStatus}
 import org.apache.spark.storage._
 import org.apache.spark.util.{BoundedPriorityQueue, ByteBufferInputStream, SerializableConfiguration, SerializableJobConf, Utils}
 import org.apache.spark.util.collection.CompactBuffer
+
+import java.lang.Class
 
 /**
  * A Spark serializer that uses the <a href="https://code.google.com/p/kryo/">
@@ -400,10 +400,14 @@ private[spark] class KryoSerializerInstance(
     }
   }
 
-  override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader): T = {
+  def className[A : ClassManifest]: String = classManifest[A].erasure.getCanonicalName
+
+  override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader,
+                                        plugins: Option[PluginContainer]): T = {
     val kryo = borrowKryo()
     val oldClassLoader = kryo.getClassLoader
     try {
+      plugins.foreach(_.onEventStarted("kryo_deserialize"))
       kryo.setClassLoader(loader)
       if (bytes.hasArray) {
         input.setBuffer(bytes.array(), bytes.arrayOffset() + bytes.position(), bytes.remaining())
@@ -411,10 +415,14 @@ private[spark] class KryoSerializerInstance(
         input.setBuffer(new Array[Byte](4096))
         input.setInputStream(new ByteBufferInputStream(bytes))
       }
-      kryo.readClassAndObject(input).asInstanceOf[T]
+      plugins.foreach(_.onEventStarted(s"kryo_read_class ${className[T]}"))
+      val c = kryo.readClassAndObject(input).asInstanceOf[T]
+      plugins.foreach(_.onEventStopped(s"kryo_read_class ${className[T]}"))
+      c
     } finally {
       kryo.setClassLoader(oldClassLoader)
       releaseKryo(kryo)
+      plugins.foreach(_.onEventStopped("kryo_deserialize"))
     }
   }
 

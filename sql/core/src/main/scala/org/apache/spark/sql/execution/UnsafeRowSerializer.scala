@@ -19,11 +19,9 @@ package org.apache.spark.sql.execution
 
 import java.io._
 import java.nio.ByteBuffer
-
 import scala.reflect.ClassTag
-
 import com.google.common.io.ByteStreams
-
+import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.serializer.{DeserializationStream, SerializationStream, Serializer, SerializerInstance}
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow
 import org.apache.spark.sql.execution.metric.SQLMetric
@@ -179,6 +177,7 @@ private class UnsafeRowSerializerInstance(
   override def serialize[T: ClassTag](t: T): ByteBuffer = throw new UnsupportedOperationException
   override def deserialize[T: ClassTag](bytes: ByteBuffer): T =
     throw new UnsupportedOperationException
-  override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader): T =
+  override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader,
+                                        plugins: Option[PluginContainer]): T =
     throw new UnsupportedOperationException
 }

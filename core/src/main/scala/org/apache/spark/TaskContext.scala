@@ -19,9 +19,9 @@ package org.apache.spark
 
 import java.io.Serializable
 import java.util.Properties
-
 import org.apache.spark.annotation.{DeveloperApi, Evolving}
 import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.memory.TaskMemoryManager
 import org.apache.spark.metrics.source.Source
 import org.apache.spark.resource.ResourceInformation
@@ -184,6 +184,8 @@ abstract class TaskContext extends Serializable {
    */
   @Evolving
   def resources(): Map[String, ResourceInformation]
+
+  def plugins(): Option[PluginContainer] = None
 
   /**
    * (java-specific) Resources allocated to the task. The key is the resource name and the value

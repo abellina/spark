@@ -19,12 +19,11 @@ package org.apache.spark
 
 import java.util.Properties
 import javax.annotation.concurrent.GuardedBy
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.Logging
+import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.memory.TaskMemoryManager
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.metrics.source.Source
@@ -54,7 +53,8 @@ private[spark] class TaskContextImpl(
     @transient private val metricsSystem: MetricsSystem,
     // The default value is only used in tests.
     override val taskMetrics: TaskMetrics = TaskMetrics.empty,
-    override val resources: Map[String, ResourceInformation] = Map.empty)
+    override val resources: Map[String, ResourceInformation] = Map.empty,
+    override val plugins: Option[PluginContainer] = None)
   extends TaskContext
   with Logging {
 

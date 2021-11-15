@@ -20,10 +20,10 @@ package org.apache.spark.scheduler
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
 import java.util.Properties
-
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.internal.plugin.PluginContainer
+import org.apache.spark.internal.{Logging, config}
 import org.apache.spark.rdd.RDD
 
 /**
@@ -75,15 +75,28 @@ private[spark] class ShuffleMapTask(
   }
 
   override def runTask(context: TaskContext): MapStatus = {
+    runTask(context, None)
+  }
+  override def runTask(context: TaskContext, plugins: Option[PluginContainer]): MapStatus = {
     // Deserialize the RDD using the broadcast variable.
+    plugins.foreach(_.onEventStarted("shuffle_map_task_run"))
+    plugins.foreach(_.onEventStarted("shuffle_map_task_deserialize"))
+    plugins.foreach(_.onEventStarted("thread_mx_bean"))
     val threadMXBean = ManagementFactory.getThreadMXBean
     val deserializeStartTimeNs = System.nanoTime()
     val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime
     } else 0L
+    plugins.foreach(_.onEventStopped("thread_mx_bean"))
+    plugins.foreach(_.onEventStarted("instantiate closure serializer"))
     val ser = SparkEnv.get.closureSerializer.newInstance()
+    plugins.foreach(_.onEventStopped("instantiate closure serializer"))
+    plugins.foreach(_.onEventStarted("broadcast value"))
+    val bValue = taskBinary.value
+    plugins.foreach(_.onEventStopped("broadcast value"))
     val rddAndDep = ser.deserialize[(RDD[_], ShuffleDependency[_, _, _])](
-      ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
+      ByteBuffer.wrap(bValue), Thread.currentThread.getContextClassLoader, plugins)
+    plugins.foreach(_.onEventStopped("shuffle_map_task_deserialize"))
     _executorDeserializeTimeNs = System.nanoTime() - deserializeStartTimeNs
     _executorDeserializeCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
@@ -96,7 +109,11 @@ private[spark] class ShuffleMapTask(
     val mapId = if (SparkEnv.get.conf.get(config.SHUFFLE_USE_OLD_FETCH_PROTOCOL)) {
       partitionId
     } else context.taskAttemptId()
-    dep.shuffleWriterProcessor.write(rdd, dep, mapId, context, partition)
+    plugins.foreach(_.onEventStarted("shuffle_map_task_write"))
+    val res = dep.shuffleWriterProcessor.write(rdd, dep, mapId, context, partition)
+    plugins.foreach(_.onEventStopped("shuffle_map_task_write"))
+    plugins.foreach(_.onEventStopped("shuffle_map_task_run"))
+    res
   }
 
   override def preferredLocations: Seq[TaskLocation] = preferredLocs

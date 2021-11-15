@@ -2239,7 +2239,12 @@ class SparkContext(config: SparkConf) extends Logging {
       func: Iterator[T] => U,
       partitions: Seq[Int]): Array[U] = {
     val cleanedFunc = clean(func)
-    runJob(rdd, (ctx: TaskContext, it: Iterator[T]) => cleanedFunc(it), partitions)
+    runJob(rdd, (ctx: TaskContext, it: Iterator[T]) => {
+      ctx.plugins().foreach(_.onEventStarted("runJob"))
+      val res = cleanedFunc(it)
+      ctx.plugins().foreach(_.onEventStopped("runJob"))
+      res
+    }, partitions)
   }
 
   /**

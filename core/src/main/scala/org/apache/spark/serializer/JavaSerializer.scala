@@ -19,12 +19,11 @@ package org.apache.spark.serializer
 
 import java.io._
 import java.nio.ByteBuffer
-
 import scala.reflect.ClassTag
-
 import org.apache.spark.SparkConf
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.internal.config._
+import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.util.{ByteBufferInputStream, ByteBufferOutputStream, Utils}
 
 private[spark] class JavaSerializationStream(
@@ -58,19 +57,30 @@ private[spark] class JavaSerializationStream(
   def close(): Unit = { objOut.close() }
 }
 
-private[spark] class JavaDeserializationStream(in: InputStream, loader: ClassLoader)
+private[spark] class JavaDeserializationStream(in: InputStream, loader: ClassLoader,
+                                               plugins: Option[PluginContainer])
   extends DeserializationStream {
 
   private val objIn = new ObjectInputStream(in) {
-    override def resolveClass(desc: ObjectStreamClass): Class[_] =
+    override def resolveClass(desc: ObjectStreamClass): Class[_] = {
+      var s: String = null
       try {
         // scalastyle:off classforname
-        Class.forName(desc.getName, false, loader)
+        s = s"resolve: ${desc.getName}"
+        plugins.foreach(_.onEventStarted(s))
+        val c = Class.forName(desc.getName, false, loader)
+        plugins.foreach(_.onEventStopped(s))
+        s = null
+        c
         // scalastyle:on classforname
       } catch {
         case e: ClassNotFoundException =>
+          if (s != null) {
+            plugins.foreach(_.onEventStopped(s))
+          }
           JavaDeserializationStream.primitiveMappings.getOrElse(desc.getName, throw e)
       }
+    }
   }
 
   def readObject[T: ClassTag](): T = objIn.readObject().asInstanceOf[T]
@@ -109,9 +119,10 @@ private[spark] class JavaSerializerInstance(
     in.readObject()
   }
 
-  override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader): T = {
+  override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader,
+                                        plugins: Option[PluginContainer]): T = {
     val bis = new ByteBufferInputStream(bytes)
-    val in = deserializeStream(bis, loader)
+    val in = deserializeStream(bis, loader, plugins)
     in.readObject()
   }
 
@@ -120,11 +131,12 @@ private[spark] class JavaSerializerInstance(
   }
 
   override def deserializeStream(s: InputStream): DeserializationStream = {
-    new JavaDeserializationStream(s, defaultClassLoader)
+    new JavaDeserializationStream(s, defaultClassLoader, None)
   }
 
-  def deserializeStream(s: InputStream, loader: ClassLoader): DeserializationStream = {
-    new JavaDeserializationStream(s, loader)
+  def deserializeStream(s: InputStream, loader: ClassLoader,
+                        plugins: Option[PluginContainer]): DeserializationStream = {
+    new JavaDeserializationStream(s, loader, plugins)
   }
 }
 
