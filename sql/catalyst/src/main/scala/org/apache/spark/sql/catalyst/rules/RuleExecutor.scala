@@ -209,6 +209,7 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
           case (plan, rule) =>
             val startTime = System.nanoTime()
             val result = rule(plan)
+            println("Rule: " + rule + " Before: " + plan + " After: " +result)
             val runTime = System.nanoTime() - startTime
             val effective = !result.fastEquals(plan)
 
@@ -260,6 +261,8 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
           logTrace(
             s"Fixed point reached for batch ${batch.name} after ${iteration - 1} iterations.")
           continue = false
+        } else {
+          // should print both plans here
         }
         lastPlan = curPlan
       }

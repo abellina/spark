@@ -17,29 +17,15 @@
 
 package org.apache.spark.sql
 
-import java.util.Locale
-
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
-
 import org.mockito.Mockito._
 
-import org.apache.spark.TestUtils.{assertNotSpilled, assertSpilled}
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.expressions.{Ascending, GenericRow, SortOrder}
-import org.apache.spark.sql.catalyst.plans.logical.Filter
-import org.apache.spark.sql.execution.{BinaryExecNode, FilterExec, ProjectExec, SortExec, SparkPlan, WholeStageCodegenExec}
+import org.apache.spark.sql.execution.{BinaryExecNode, SortExec, SparkPlan}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
-import org.apache.spark.sql.execution.exchange.ShuffleExchangeExec
 import org.apache.spark.sql.execution.joins._
-import org.apache.spark.sql.execution.python.BatchEvalPythonExec
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.test.SharedSparkSession
-import org.apache.spark.sql.types.StructType
 
 class JoinSuite extends QueryTest with SharedSparkSession with AdaptiveSparkPlanHelper {
-  import testImplicits._
 
   private def attachCleanupResourceChecker(plan: SparkPlan): Unit = {
     // SPARK-21492: Check cleanupResources are finally triggered in SortExec node for every
@@ -63,7 +49,7 @@ class JoinSuite extends QueryTest with SharedSparkSession with AdaptiveSparkPlan
   def statisticSizeInByte(df: DataFrame): BigInt = {
     df.queryExecution.optimizedPlan.stats.sizeInBytes
   }
-
+/*
   test("equi-join is hash-join") {
     val x = testData2.as("x")
     val y = testData2.as("y")
@@ -72,11 +58,14 @@ class JoinSuite extends QueryTest with SharedSparkSession with AdaptiveSparkPlan
     assert(planned.size === 1)
   }
 
+ */
+
   def assertJoin(pair: (String, Class[_ <: BinaryExecNode])): Any = {
     val sqlString = pair._1
     val c = pair._2
     val df = sql(sqlString)
     val physical = df.queryExecution.sparkPlan
+    println(physical)
     val operators = physical.collect {
       case j: BroadcastHashJoinExec => j
       case j: ShuffledHashJoinExec => j
@@ -91,7 +80,7 @@ class JoinSuite extends QueryTest with SharedSparkSession with AdaptiveSparkPlan
     }
     operators.head
   }
-
+/*
   test("join operator selection") {
     spark.sharedState.cacheManager.clearCache()
 
@@ -1150,6 +1139,7 @@ class JoinSuite extends QueryTest with SharedSparkSession with AdaptiveSparkPlan
       assert(collect(plan) { case _: SortExec => true }.size === 3)
     })
   }
+ */
 
   test("SPARK-32290: SingleColumn Null Aware Anti Join Optimize") {
     withSQLConf(SQLConf.OPTIMIZE_NULL_AWARE_ANTI_JOIN.key -> "true",
@@ -1190,7 +1180,7 @@ class JoinSuite extends QueryTest with SharedSparkSession with AdaptiveSparkPlan
         classOf[BroadcastNestedLoopJoinExec]))
     }
   }
-
+/*
   test("SPARK-32399: Full outer shuffled hash join") {
     val inputDFs = Seq(
       // Test unique join key
@@ -1440,4 +1430,5 @@ class JoinSuite extends QueryTest with SharedSparkSession with AdaptiveSparkPlan
       }
     }
   }
+ */
 }
