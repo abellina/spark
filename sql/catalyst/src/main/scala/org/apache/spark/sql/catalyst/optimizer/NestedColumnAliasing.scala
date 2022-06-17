@@ -83,28 +83,32 @@ import org.apache.spark.sql.types._
  */
 object NestedColumnAliasing {
 
-  def unapply(plan: LogicalPlan): Option[LogicalPlan] = plan match {
-    /**
-     * This pattern is needed to support [[Filter]] plan cases like
-     * [[Project]]->[[Filter]]->listed plan in [[canProjectPushThrough]] (e.g., [[Window]]).
-     * The reason why we don't simply add [[Filter]] in [[canProjectPushThrough]] is that
-     * the optimizer can hit an infinite loop during the [[PushDownPredicates]] rule.
-     */
-    case Project(projectList, Filter(condition, child)) if
+  def unapply(plan: LogicalPlan): Option[LogicalPlan] = {
+    val after = plan match {
+      /**
+       * This pattern is needed to support [[Filter]] plan cases like
+       * [[Project]]->[[Filter]]->listed plan in [[canProjectPushThrough]] (e.g., [[Window]]).
+       * The reason why we don't simply add [[Filter]] in [[canProjectPushThrough]] is that
+       * the optimizer can hit an infinite loop during the [[PushDownPredicates]] rule.
+       */
+      case Project(projectList, Filter(condition, child)) if
         SQLConf.get.nestedSchemaPruningEnabled && canProjectPushThrough(child) =>
-      rewritePlanIfSubsetFieldsUsed(
-        plan, projectList ++ Seq(condition) ++ child.expressions, child.producedAttributes.toSeq)
+        rewritePlanIfSubsetFieldsUsed(
+          plan, projectList ++ Seq(condition) ++ child.expressions, child.producedAttributes.toSeq)
 
-    case Project(projectList, child) if
+      case Project(projectList, child) if
         SQLConf.get.nestedSchemaPruningEnabled && canProjectPushThrough(child) =>
-      rewritePlanIfSubsetFieldsUsed(
-        plan, projectList ++ child.expressions, child.producedAttributes.toSeq)
+        rewritePlanIfSubsetFieldsUsed(
+          plan, projectList ++ child.expressions, child.producedAttributes.toSeq)
 
-    case p if SQLConf.get.nestedSchemaPruningEnabled && canPruneOn(p) =>
-      rewritePlanIfSubsetFieldsUsed(
-        plan, p.expressions, p.producedAttributes.toSeq)
+      case p if SQLConf.get.nestedSchemaPruningEnabled && canPruneOn(p) =>
+        rewritePlanIfSubsetFieldsUsed(
+          plan, p.expressions, p.producedAttributes.toSeq)
 
-    case _ => None
+      case _ => None
+    }
+    println(s"rnested before:\n${plan}\n\nafter:\n${after}")
+    after
   }
 
   /**
@@ -139,6 +143,7 @@ object NestedColumnAliasing {
             case g: GetStructField => g.extractFieldName
             case g: GetArrayStructFields => g.field.name
           }
+          // TODO: here is the issue
           ev -> Alias(ev, s"_extract_$fieldName")()
         }
 
@@ -146,7 +151,9 @@ object NestedColumnAliasing {
       }
 
     val nestedFieldToAlias = attributeToExtractValuesAndAliases.values.flatten
-      .map { case (field, alias) => field.canonicalized -> alias }.toMap
+      .map { case (field, alias) => {
+        field.canonicalized -> alias
+      }}.toMap
 
     // A reference attribute can have multiple aliases for nested fields.
     val attrToAliases =
@@ -257,6 +264,7 @@ object NestedColumnAliasing {
         case _ => // ignore
       }
     }
+    // TODO: IT IS HERE!
     val exclusiveAttrSet = AttributeSet(exclusiveAttrs ++ otherRootReferences)
 
     // Remove cosmetic variations when we group extractors by their references

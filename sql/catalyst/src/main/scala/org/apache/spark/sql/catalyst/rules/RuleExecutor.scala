@@ -209,6 +209,7 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
           case (plan, rule) =>
             val startTime = System.nanoTime()
             val result = rule(plan)
+            println(s"Plan after ${rule.ruleName}:\n ${result}")
             val runTime = System.nanoTime() - startTime
             val effective = !result.fastEquals(plan)
 
@@ -228,7 +229,11 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
               throw QueryExecutionErrors.structuralIntegrityIsBrokenAfterApplyingRuleError(
                 rule.ruleName, batch.name)
             }
-
+            if (rule.ruleName.contains("ColumnPruning")) {
+              println(s"column prunning!! ${rule.ruleName} last: ${lastPlan} cur: ${result}")
+            } else if (rule.ruleName.contains("RewritePredicateSubquery")){
+              println(s"rewrite preds!! ${rule.ruleName} last: ${lastPlan} cur: ${result}")
+            }
             result
         }
         iteration += 1
@@ -242,7 +247,8 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
             }
             val message = s"Max iterations (${iteration - 1}) reached for batch ${batch.name}" +
               s"$endingMsg"
-            if (Utils.isTesting || batch.strategy.errorOnExceed) {
+            println(message)
+            if ((Utils.isTesting || batch.strategy.errorOnExceed)) {
               throw new RuntimeException(message)
             } else {
               logWarning(message)
@@ -260,6 +266,8 @@ abstract class RuleExecutor[TreeType <: TreeNode[_]] extends Logging {
           logTrace(
             s"Fixed point reached for batch ${batch.name} after ${iteration - 1} iterations.")
           continue = false
+        } else if (iteration > 50) {
+          println(s"here!! ${batch.name} last: ${lastPlan} cur: ${curPlan}")
         }
         lastPlan = curPlan
       }

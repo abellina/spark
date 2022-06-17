@@ -24,12 +24,9 @@ import org.scalactic.Equality
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, QueryTest, Row}
 import org.apache.spark.sql.catalyst.SchemaPruningTest
-import org.apache.spark.sql.catalyst.expressions.Concat
 import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
-import org.apache.spark.sql.catalyst.plans.logical.Expand
 import org.apache.spark.sql.execution.FileSourceScanExec
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
-import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.types._
@@ -114,7 +111,7 @@ abstract class SchemaPruningSuite
   val briefContactsWithDataPartitionColumn =
     briefContacts.map { case BriefContact(id, name, address) =>
       BriefContactWithDataPartitionColumn(id, name, address, 2) }
-
+/*
   testSchemaPruning("select only top-level fields") {
     val query = sql("select address from contacts")
     checkScan(query, "struct<address:string>")
@@ -646,6 +643,7 @@ abstract class SchemaPruningSuite
       }
     }
   }
+ */
 
   protected def testSchemaPruning(testName: String)(testThunk: => Unit): Unit = {
     test(s"Spark vectorized reader - without partition data column - $testName") {
@@ -653,22 +651,22 @@ abstract class SchemaPruningSuite
         withContacts(testThunk)
       }
     }
-    test(s"Spark vectorized reader - with partition data column - $testName") {
-      withSQLConf(vectorizedReaderEnabledKey -> "true") {
-        withContactsWithDataPartitionColumn(testThunk)
-      }
-    }
+   // test(s"Spark vectorized reader - with partition data column - $testName") {
+   //   withSQLConf(vectorizedReaderEnabledKey -> "true") {
+   //     withContactsWithDataPartitionColumn(testThunk)
+   //   }
+   // }
 
-    test(s"Non-vectorized reader - without partition data column - $testName") {
-      withSQLConf(vectorizedReaderEnabledKey -> "false") {
-        withContacts(testThunk)
-      }
-    }
-    test(s"Non-vectorized reader - with partition data column - $testName") {
-      withSQLConf(vectorizedReaderEnabledKey-> "false") {
-        withContactsWithDataPartitionColumn(testThunk)
-      }
-    }
+   // test(s"Non-vectorized reader - without partition data column - $testName") {
+   //   withSQLConf(vectorizedReaderEnabledKey -> "false") {
+   //     withContacts(testThunk)
+   //   }
+   // }
+   // test(s"Non-vectorized reader - with partition data column - $testName") {
+   //   withSQLConf(vectorizedReaderEnabledKey-> "false") {
+   //     withContactsWithDataPartitionColumn(testThunk)
+   //   }
+   // }
   }
 
   private def withContacts(testThunk: => Unit): Unit = {
@@ -858,7 +856,7 @@ abstract class SchemaPruningSuite
         assert(scanSchema === expectedScanSchema)
     }
   }
-
+/*
   testSchemaPruning("SPARK-34963: extract case-insensitive struct field from array") {
     withSQLConf(SQLConf.CASE_SENSITIVE.key -> "false") {
       val query1 = spark.table("contacts")
@@ -1080,4 +1078,6 @@ abstract class SchemaPruningSuite
       checkAnswer(query, Row(Row("Jane", "X.", "Doe")) :: Nil)
     }
   }
+
+ */
 }

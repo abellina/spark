@@ -83,11 +83,11 @@ abstract class Optimizer(catalogManager: CatalogManager)
         ReorderJoin,
         EliminateOuterJoin,
         PushDownPredicates,
-        PushDownLeftSemiAntiJoin,
+        PushDownLeftSemiAntiJoin, // breaks up a get child returning the parent alias
         PushLeftSemiLeftAntiThroughJoin,
         LimitPushDown,
         LimitPushDownThroughWindow,
-        ColumnPruning,
+        ColumnPruning, // fix it back up, but with new alias
         GenerateOptimization,
         // Operator combine
         CollapseRepartition,
@@ -138,7 +138,8 @@ abstract class Optimizer(catalogManager: CatalogManager)
       Batch("Operator Optimization before Inferring Filters", fixedPoint,
         operatorOptimizationRuleSet: _*) ::
       Batch("RewritePredicateSubquery before Inferring Filters", Once,
-        RewritePredicateSubquery) ::
+        RewritePredicateSubquery,
+      ) ::
       Batch("Infer Filters", Once,
         InferFiltersFromGenerate,
         InferFiltersFromConstraints) ::
@@ -830,10 +831,15 @@ object ColumnPruning extends Rule[LogicalPlan] {
     plan.transformWithPruning(AlwaysProcess.fn, ruleId) {
     // Prunes the unused columns from project list of Project/Aggregate/Expand
     case p @ Project(_, p2: Project) if !p2.outputSet.subsetOf(p.references) =>
-      p.copy(child = p2.copy(projectList = p2.projectList.filter(p.references.contains)))
+      val after = p.copy(child = p2.copy(projectList = p2.projectList.filter(p.references.contains)))
+      println(s"r1 before:\n${p}\n\nafter:\n${after}")
+      println(s"r1 projectList:\n${p2.projectList}\n p.references:${p.references}")
+      after
     case p @ Project(_, a: Aggregate) if !a.outputSet.subsetOf(p.references) =>
-      p.copy(
+      val after = p.copy(
         child = a.copy(aggregateExpressions = a.aggregateExpressions.filter(p.references.contains)))
+      println(s"r2 before:\n${p}\n\nafter:\n${after}")
+      after
     case a @ Project(_, e @ Expand(_, _, grandChild)) if !e.outputSet.subsetOf(a.references) =>
       val newOutput = e.output.filter(a.references.contains(_))
       val newProjects = e.projections.map { proj =>
@@ -841,20 +847,28 @@ object ColumnPruning extends Rule[LogicalPlan] {
           newOutput.contains(a)
         }.unzip._1
       }
-      a.copy(child = Expand(newProjects, newOutput, grandChild))
+      val after = a.copy(child = Expand(newProjects, newOutput, grandChild))
+      println(s"r3 before:\n${a}\n\nafter:\n${after}")
+      after
 
     // Prune and drop AttachDistributedSequence if the produced attribute is not referred.
     case p @ Project(_, a @ AttachDistributedSequence(_, grandChild))
         if !p.references.contains(a.sequenceAttr) =>
-      p.copy(child = prunedChild(grandChild, p.references))
+      val after = p.copy(child = prunedChild(grandChild, p.references))
+      println(s"r4 before:\n${p}\n\nafter:\n${after}")
+      after
 
     // Prunes the unused columns from child of `DeserializeToObject`
     case d @ DeserializeToObject(_, _, child) if !child.outputSet.subsetOf(d.references) =>
-      d.copy(child = prunedChild(child, d.references))
+      val after = d.copy(child = prunedChild(child, d.references))
+      println(s"r5 before:\n${d}\n\nafter:\n${after}")
+      after
 
     // Prunes the unused columns from child of Aggregate/Expand/Generate/ScriptTransformation
     case a @ Aggregate(_, _, child) if !child.outputSet.subsetOf(a.references) =>
-      a.copy(child = prunedChild(child, a.references))
+      val res = a.copy(child = prunedChild(child, a.references))
+      println(s"Before:\n${a} \n\nAfter agg rule:\n${res}")
+      res
     case f @ FlatMapGroupsInPandas(_, _, _, child) if !child.outputSet.subsetOf(f.references) =>
       f.copy(child = prunedChild(child, f.references))
     case e @ Expand(_, _, child) if !child.outputSet.subsetOf(e.references) =>
@@ -873,7 +887,9 @@ object ColumnPruning extends Rule[LogicalPlan] {
 
     // Eliminate unneeded attributes from right side of a Left Existence Join.
     case j @ Join(_, right, LeftExistence(_), _, _) =>
-      j.copy(right = prunedChild(right, j.references))
+      val after = j.copy(right = prunedChild(right, j.references))
+      println(s"r6 before:\n${j}\n\nafter:\n${after}")
+      after
 
     // all the columns will be used to compare, so we can't prune them
     case p @ Project(_, _: SetOperation) => p
@@ -911,18 +927,23 @@ object ColumnPruning extends Rule[LogicalPlan] {
     // Can't prune the columns on LeafNode
     case p @ Project(_, _: LeafNode) => p
 
-    case NestedColumnAliasing(rewrittenPlan) => rewrittenPlan
+    case NestedColumnAliasing(rewrittenPlan) => 
+      println("here NCA") 
+      println("plan: ${plan}\n rewrittenPlan:${rewrittenPlan}")
+      rewrittenPlan
 
     // for all other logical plans that inherits the output from it's children
     // Project over project is handled by the first case, skip it here.
     case p @ Project(_, child) if !child.isInstanceOf[Project] =>
       val required = child.references ++ p.references
-      if (!child.inputSet.subsetOf(required)) {
+      val res = if (!child.inputSet.subsetOf(required)) {
         val newChildren = child.children.map(c => prunedChild(c, required))
         p.copy(child = child.withNewChildren(newChildren))
       } else {
         p
       }
+      println(s"Project rule before:\n${p} \n\n After:\n${res}")
+      res
   })
 
   /** Applies a projection only when the child is producing unnecessary attributes */

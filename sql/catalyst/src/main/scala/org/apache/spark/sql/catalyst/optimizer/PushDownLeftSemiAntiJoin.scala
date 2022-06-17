@@ -47,9 +47,10 @@ object PushDownLeftSemiAntiJoin extends Rule[LogicalPlan]
         p.copy(child = Join(gChild, rightOp, joinType, joinCond, hint))
       } else {
         val aliasMap = getAliasMap(p)
-        val newJoinCond = if (aliasMap.nonEmpty) {
-          Option(replaceAlias(joinCond.get, aliasMap))
-        } else {
+       // val newJoinCond = joinCond
+       val newJoinCond = if (aliasMap.nonEmpty) {
+         Option(replaceAlias(joinCond.get, aliasMap))
+       } else {
           joinCond
         }
         p.copy(child = Join(gChild, rightOp, joinType, newJoinCond, hint))
@@ -242,29 +243,37 @@ object PushLeftSemiLeftAntiThroughJoin extends Rule[LogicalPlan] with PredicateH
     }
   }
 
-  def apply(plan: LogicalPlan): LogicalPlan = plan.transformWithPruning(
+  def apply(plan: LogicalPlan): LogicalPlan = {
+    val inputPlan = plan
+    println(s"at PDLSAJ with input ${inputPlan}")
+    plan.transformWithPruning(
     _.containsPattern(LEFT_SEMI_OR_ANTI_JOIN), ruleId) {
-    // push LeftSemi/LeftAnti down into the join below
-    case j @ Join(AllowedJoin(left), right, LeftSemiOrAnti(joinType), joinCond, parentHint) =>
-      val (childJoinType, childLeft, childRight, childCondition, childHint) =
-        (left.joinType, left.left, left.right, left.condition, left.hint)
-      val action = pushTo(left, right, joinCond)
+      // push LeftSemi/LeftAnti down into the join below
+      case j@Join(AllowedJoin(left), right, LeftSemiOrAnti(joinType), joinCond, parentHint) =>
+        print(s"PDLSAJ ${j}")
+        val (childJoinType, childLeft, childRight, childCondition, childHint) =
+          (left.joinType, left.left, left.right, left.condition, left.hint)
+        val action = pushTo(left, right, joinCond)
 
-      action match {
-        case PushdownDirection.TO_LEFT_BRANCH
-          if (childJoinType == LeftOuter || childJoinType.isInstanceOf[InnerLike]) =>
-          // push down leftsemi/anti join to the left table
-          val newLeft = Join(childLeft, right, joinType, joinCond, parentHint)
-          Join(newLeft, childRight, childJoinType, childCondition, childHint)
-        case PushdownDirection.TO_RIGHT_BRANCH
-          if (childJoinType == RightOuter || childJoinType.isInstanceOf[InnerLike]) =>
-          // push down leftsemi/anti join to the right table
-          val newRight = Join(childRight, right, joinType, joinCond, parentHint)
-          Join(childLeft, newRight, childJoinType, childCondition, childHint)
-        case _ =>
-          // Do nothing
-          j
-      }
+        action match {
+          case PushdownDirection.TO_LEFT_BRANCH
+            if (childJoinType == LeftOuter || childJoinType.isInstanceOf[InnerLike]) =>
+            // push down leftsemi/anti join to the left table
+            val newLeft = Join(childLeft, right, joinType, joinCond, parentHint)
+            Join(newLeft, childRight, childJoinType, childCondition, childHint)
+          case PushdownDirection.TO_RIGHT_BRANCH
+            if (childJoinType == RightOuter || childJoinType.isInstanceOf[InnerLike]) =>
+            // push down leftsemi/anti join to the right table
+            val newRight = Join(childRight, right, joinType, joinCond, parentHint)
+            Join(childLeft, newRight, childJoinType, childCondition, childHint)
+          case _ =>
+            // Do nothing
+            j
+        }
+      case x =>
+        println(s"at PDLSAJ transforming down no match ${x}")
+        x
+    }
   }
 }
 
