@@ -17,13 +17,13 @@
 
 package org.apache.spark.shuffle
 
+import ai.rapids.cudf.{NvtxColor, NvtxRange}
+
 import java.io.{File, FileNotFoundException}
 import java.net.ConnectException
 import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
-
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
-
 import org.apache.spark.{ShuffleDependency, SparkConf, SparkContext, SparkEnv}
 import org.apache.spark.annotation.Since
 import org.apache.spark.internal.Logging
@@ -154,7 +154,9 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
           val request = defReqQueue.dequeue()
           logDebug(s"Processing deferred push request for $remoteAddress with "
             + s"${request.blocks.length} blocks")
+          val range = new NvtxRange("push_deferred", NvtxColor.BLUE)
           sendRequest(request)
+          range.close()
           if (defReqQueue.isEmpty) {
             deferredPushRequests -= remoteAddress
           }
@@ -171,7 +173,9 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
         deferredPushRequests.getOrElseUpdate(remoteAddress, new Queue[PushRequest]())
           .enqueue(request)
       } else {
+        val range = new NvtxRange("push_regular", NvtxColor.GREEN)
         sendRequest(request)
+        range.close()
       }
     }
 
@@ -229,17 +233,21 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
 
       override def onBlockPushSuccess(blockId: String, data: ManagedBuffer): Unit = {
         logTrace(s"Push for block $blockId to $address successful.")
+        val success = new NvtxRange("push_success", NvtxColor.DARK_GREEN)
         handleResult(PushResult(blockId, null))
+        success.close()
       }
 
       override def onBlockPushFailure(blockId: String, exception: Throwable): Unit = {
         // check the message or it's cause to see it needs to be logged.
+        val failure = new NvtxRange("push_failed", NvtxColor.RED)
         if (!errorHandler.shouldLogError(exception)) {
           logTrace(s"Pushing block $blockId to $address failed.", exception)
         } else {
           logWarning(s"Pushing block $blockId to $address failed.", exception)
         }
         handleResult(PushResult(blockId, exception))
+        failure.close()
       }
     }
     // In addition to randomizing the order of the push requests, further randomize the order
