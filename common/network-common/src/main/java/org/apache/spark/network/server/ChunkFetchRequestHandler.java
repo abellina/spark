@@ -134,6 +134,7 @@ public class ChunkFetchRequestHandler extends SimpleChannelInboundHandler<ChunkF
   private ChannelFuture respond(
       final Channel channel,
       final Encodable result) throws InterruptedException {
+    // TODO: here
     final SocketAddress remoteAddress = channel.remoteAddress();
     ChannelFuture channelFuture;
     if (syncModeEnabled) {

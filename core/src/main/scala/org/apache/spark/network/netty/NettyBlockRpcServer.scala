@@ -22,6 +22,8 @@ import java.nio.ByteBuffer
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 
+import ai.rapids.cudf.{NvtxColor, NvtxRange}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.BlockDataManager
 import org.apache.spark.network.buffer.NioManagedBuffer
@@ -55,6 +57,7 @@ class NettyBlockRpcServer(
 
     message match {
       case openBlocks: OpenBlocks =>
+        val r = new NvtxRange(s"open_blocks_${client.getSocketAddress.toString}", NvtxColor.YELLOW)
         val blocksNum = openBlocks.blockIds.length
         val blocks = (0 until blocksNum).map { i =>
           val blockId = BlockId.apply(openBlocks.blockIds(i))
@@ -66,6 +69,7 @@ class NettyBlockRpcServer(
           client.getChannel)
         logTrace(s"Registered streamId $streamId with $blocksNum buffers")
         responseContext.onSuccess(new StreamHandle(streamId, blocksNum).toByteBuffer)
+        r.close()
 
       case fetchShuffleBlocks: FetchShuffleBlocks =>
         val blocks = fetchShuffleBlocks.mapIds.zipWithIndex.flatMap { case (mapId, index) =>
