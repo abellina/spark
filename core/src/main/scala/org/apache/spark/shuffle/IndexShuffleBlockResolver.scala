@@ -170,6 +170,7 @@ private[spark] class IndexShuffleBlockResolver(
    * Remove data file and index file that contain the output data from one map.
    */
   def removeDataByMap(shuffleId: Int, mapId: Long): Unit = {
+    logWarning(s"removing data for shuffle: ${shuffleId} mapId: ${mapId}")
     var file = getDataFile(shuffleId, mapId)
     if (file.exists() && !file.delete()) {
       logWarning(log"Error deleting data ${MDC(PATH, file.getPath())}")

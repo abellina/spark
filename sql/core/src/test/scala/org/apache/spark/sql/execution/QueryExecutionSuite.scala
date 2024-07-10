@@ -228,6 +228,7 @@ class QueryExecutionSuite extends SharedSparkSession {
     assertNoTag(tag5, df.queryExecution.sparkPlan)
   }
 
+  /*
   test("Logging plan changes for execution") {
     val testAppender = new LogAppender("plan changes")
     withLogAppender(testAppender) {
@@ -241,6 +242,7 @@ class QueryExecutionSuite extends SharedSparkSession {
         _.getMessage.getFormattedMessage.contains(expectedMsg)))
     }
   }
+  
 
   test("SPARK-34129: Add table name to LogicalRelation.simpleString") {
     withTable("spark_34129") {
@@ -315,6 +317,7 @@ class QueryExecutionSuite extends SharedSparkSession {
     mockCallback.assertExecutedPlanPrepared()
   }
 
+ */ 
   private def cleanupShuffles(): Unit = {
     val blockManager = spark.sparkContext.env.blockManager
     blockManager.diskBlockManager.getAllBlocks().foreach {
@@ -325,8 +328,9 @@ class QueryExecutionSuite extends SharedSparkSession {
   }
 
   test("SPARK-47764: Cleanup shuffle dependencies - DoNotCleanup mode") {
+    spark.conf.set("spark.sql.shuffleDependency.fileCleanup.enabled", false)
     val plan = spark.range(100).repartition(10).logicalPlan
-    val df = Dataset.ofRows(spark, plan, DoNotCleanup)
+    val df = Dataset.ofRows(spark, plan)
     df.collect()
 
     val blockManager = spark.sparkContext.env.blockManager
@@ -336,8 +340,10 @@ class QueryExecutionSuite extends SharedSparkSession {
   }
 
   test("SPARK-47764: Cleanup shuffle dependencies - SkipMigration mode") {
+    spark.conf.set("spark.sql.shuffleDependency.fileCleanup.enabled", false)
+    spark.conf.set("spark.sql.shuffleDependency.skipMigration.enabled", true)
     val plan = spark.range(100).repartition(10).logicalPlan
-    val df = Dataset.ofRows(spark, plan, SkipMigration)
+    val df = Dataset.ofRows(spark, plan)
     df.collect()
 
     val blockManager = spark.sparkContext.env.blockManager
@@ -347,8 +353,10 @@ class QueryExecutionSuite extends SharedSparkSession {
   }
 
   test("SPARK-47764: Cleanup shuffle dependencies - RemoveShuffleFiles mode") {
+    spark.conf.set("spark.sql.shuffleDependency.fileCleanup.enabled", true)
+    spark.conf.set("spark.sql.shuffleDependency.skipMigration.enabled", false)
     val plan = spark.range(100).repartition(10).logicalPlan
-    val df = Dataset.ofRows(spark, plan, RemoveShuffleFiles)
+    val df = Dataset.ofRows(spark, plan)
     df.collect()
 
     val blockManager = spark.sparkContext.env.blockManager

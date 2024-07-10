@@ -173,6 +173,7 @@ object SQLExecution extends Logging {
               case _ =>
                 Iterable.empty
             }
+            logWarning(s"attempting to clean up shuffle ids: ${shuffleIds}")
             shuffleIds.foreach { shuffleId =>
               queryExecution.shuffleCleanupMode match {
                 case RemoveShuffleFiles =>

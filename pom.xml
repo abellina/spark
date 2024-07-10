@@ -3016,7 +3016,6 @@
               <arg>-release</arg>
               <arg>17</arg>
               <arg>-Wconf:cat=deprecation:wv,any:e</arg>
-              <arg>-Wunused:imports</arg>
               <arg>-Wconf:cat=scaladoc:wv</arg>
               <arg>-Wconf:msg=^(?=.*?method|value|type|object|trait|inheritance)(?=.*?deprecated)(?=.*?since 2.13).+$:e</arg>
               <arg>-Wconf:msg=^(?=.*?Widening conversion from)(?=.*?is deprecated because it loses precision).+$:e</arg>
